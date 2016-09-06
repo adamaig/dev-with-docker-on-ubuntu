@@ -17,3 +17,7 @@ gpg --keyserver hkp://keys.gnupg.net --recv-keys 409B6B1796C275462A1703113804BB8
 [[ -f /vagrant/localextras.sh ]] && bash /vagrant/localextras.sh
 
 echo "** Consider installing MySQL, PostgreSQL, and Redis"
+
+# If there are problems with font configuration this may help
+#sudo dpkg-reconfigure console-setup
+

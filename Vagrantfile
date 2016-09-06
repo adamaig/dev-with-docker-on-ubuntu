@@ -28,7 +28,7 @@ Vagrant.configure("2") do |config|
   config.vm.provider "virtualbox" do |vb|
     vb.name = "dev-on-ub2"
     # Customize the amount of memory on the VM:
-    vb.memory = "2048"
+    vb.memory = "4096"
     vb.cpus = 2
     # Display the VirtualBox GUI when booting the machine
     #vb.gui = true
@@ -37,6 +37,7 @@ Vagrant.configure("2") do |config|
   USERNAME = ENV.fetch('USER')
 
   config.vm.provision "shell", inline: <<-SHELL
+    update-locale LANG="en_US.UTF-8" LC_COLLATE="en_US.UTF-8" LC_CTYPE="en_US.UTF-8" LC_MESSAGES="en_US.UTF-8" LC_MONETARY="en_US.UTF-8" LC_NUMERIC="en_US.UTF-8" LC_TIME="en_US.UTF-8"
     apt-get update -y
     apt-get install -y vim curl apt-transport-https ca-certificates sqlite network-manager
     echo 'deb https://apt.dockerproject.org/repo ubuntu-xenial main' > /etc/apt/sources.list.d/docker.list
@@ -69,7 +70,7 @@ Vagrant.configure("2") do |config|
 
   config.vm.provision "shell", inline: <<-SHELL
     apt-get install -y zsh
-    adduser --shell=/bin/zsh --disabled-password --gecos "#{USERNAME}" #{USERNAME}
+    adduser --force-badname --shell=/bin/zsh --disabled-password --gecos "#{USERNAME}" #{USERNAME}
     usermod -G docker,admin,sudo #{USERNAME}
     echo "#{USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/#{USERNAME}
     mkdir ~#{USERNAME}/.ssh 
@@ -81,3 +82,4 @@ Vagrant.configure("2") do |config|
   SHELL
 
 end
+
