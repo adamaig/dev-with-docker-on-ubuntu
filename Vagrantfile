@@ -58,7 +58,6 @@ Vagrant.configure("2") do |config|
     groupadd -f admin
     usermod -aG admin $USER
   SHELL
-
   
   [
     { s: "~#{USERNAME}/.ssh/id_rsa", d: "/tmp/id_rsa" },
