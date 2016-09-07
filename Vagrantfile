@@ -85,7 +85,10 @@ Vagrant.configure("2") do |config|
     apt-get update -y
     apt-cache policy docker-engine
     apt-get install -y linux-image-extra-$(uname -r) linux-image-extra-virtual
-    apt-get install -y docker-engine docker-compose
+    apt-get install -y docker-engine
+
+    curl -L https://github.com/docker/compose/releases/download/1.8.0/docker-compose-`uname -s`-`uname -m` > /usr/local/bin/docker-compose
+    chmod +x /usr/local/bin/docker-compose
 
     echo "creating docker group and user"
     groupadd -f docker
