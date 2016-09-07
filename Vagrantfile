@@ -1,6 +1,45 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
+VM_IP="192.168.90.10"
+
+require 'open3'
+def syscall(log, cmd)
+  print "#{log} ... "
+  status = nil
+  Open3.popen2e(cmd) do |input, output, thr|
+    output.each {|line| puts line }
+    status = thr.value
+  end
+  if status.success?
+    puts "done"
+  else
+    exit(1)
+  end
+end
+
+class SetupDockerRouting < Vagrant.plugin('2')
+  name 'setup_docker_routing'
+
+  class Action
+    def initialize(app, env)
+      @app = app
+    end
+
+    def call(env)
+      syscall("** Adding *.docker resolver", "sudo bash -c 'mkdir -p /etc/resolver ; echo nameserver #{VM_IP} > /etc/resolver/docker'")
+      syscall("** Adding route", "sudo route -n delete 172.17.0.0/16 #{VM_IP}; sudo route -n add 172.17.0.0/16 #{VM_IP}")
+
+      @app.call(env)
+    end
+  end
+
+  action_hook(:setup_docker_routing, :machine_action_up) do |hook|
+    hook.append(SetupDockerRouting::Action)
+  end
+end
+
+
 Vagrant.configure("2") do |config|
   config.vm.box = "bento/ubuntu-16.04"
   config.vm.box_check_update = false
@@ -12,7 +51,7 @@ Vagrant.configure("2") do |config|
 
   # Create a private network, which allows host-only access to the machine
   # using a specific IP.
-  config.vm.network "private_network", ip: "192.168.90.10"
+  config.vm.network "private_network", ip: VM_IP
 
   # Create a public network, which generally matched to bridged network.
   # Bridged networks make the machine appear as another physical device on
@@ -59,7 +98,7 @@ Vagrant.configure("2") do |config|
     groupadd -f admin
     usermod -aG admin $USER
   SHELL
-  
+
   [
     { s: "~#{USERNAME}/.ssh/id_rsa", d: "/tmp/id_rsa" },
     { s: "~#{USERNAME}/.ssh/id_rsa.pub", d: "/tmp/id_rsa.pub" },
@@ -73,8 +112,8 @@ Vagrant.configure("2") do |config|
     adduser --force-badname --shell=/bin/zsh --disabled-password --gecos "#{USERNAME}" #{USERNAME}
     usermod -G docker,admin,sudo #{USERNAME}
     echo "#{USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/#{USERNAME}
-    mkdir ~#{USERNAME}/.ssh 
-    chmod 0700 ~#{USERNAME}/.ssh 
+    mkdir ~#{USERNAME}/.ssh
+    chmod 0700 ~#{USERNAME}/.ssh
     mv /tmp/id_rsa* ~#{USERNAME}/.ssh/
     mv /tmp/extras.sh ~#{USERNAME}/
     chown -R #{USERNAME}: ~#{USERNAME}
