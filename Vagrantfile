@@ -112,6 +112,7 @@ Vagrant.configure("2") do |config|
   [
     { s: "~#{USERNAME}/.ssh/id_rsa", d: "/tmp/id_rsa" },
     { s: "~#{USERNAME}/.ssh/id_rsa.pub", d: "/tmp/id_rsa.pub" },
+    { s: "~#{USERNAME}/.ssh/config", d: "/tmp/ssh_config" },
     { s: "./extras.sh", d: "/tmp/extras.sh" },
     { s: "./localextras.sh", d: "/tmp/localextras.sh" },
   ].each do |x|
@@ -125,7 +126,7 @@ Vagrant.configure("2") do |config|
     echo "#{USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/#{USERNAME}
     mkdir ~#{USERNAME}/.ssh
     chmod 0700 ~#{USERNAME}/.ssh
-    mv /tmp/id_rsa* ~#{USERNAME}/.ssh/
+    mv /tmp/id_rsa* /tmp/ssh_config ~#{USERNAME}/.ssh/
     mv /tmp/extras.sh /tmp/localextras.sh ~#{USERNAME}/
     mkdir ~#{USERNAME}/projects
     echo "File from dev-on-ub" > ~#{USERNAME}/projects/README.txt
