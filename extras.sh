@@ -1,7 +1,8 @@
 #!/bin/bash
 
 echo "** INSTALLING zsh, vim, tmux, powerline fonts, Ruby, NodeJS, Go"
-sudo apt-get install -y zsh vim tmux fonts-powerline nodejs-legacy ruby golang-go
+sudo apt-get install -y zsh vim tmux fonts-powerline nodejs-legacy ruby \
+  golang-go silversearcher-ag
 sudo fc-cache -vf # to activate the fonts: see http://askubuntu.com/questions/283908/how-can-i-install-and-use-powerline-plugin
 
 echo "** INSTALLING oh-my-zsh"
@@ -14,10 +15,15 @@ echo "** INSTALLING RVM"
 gpg --keyserver hkp://keys.gnupg.net --recv-keys 409B6B1796C275462A1703113804BB82D39DC0E3
 \curl -sSL https://get.rvm.io | bash -s stable
 
-[[ -f /vagrant/localextras.sh ]] && bash /vagrant/localextras.sh
+echo "** Setting up ssh keys and hosts"
+cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
+chmod 0600 ~/.ssh/authorized_keys
+ssh-keyscan github.com bitbucket.org >> ~/.ssh/known_hosts
+
+[[ -f ~/localextras.sh ]] && bash ~/localextras.sh
 
 echo "** Consider installing MySQL, PostgreSQL, and Redis"
-# sudo apt-get install -y postgresql libpq-dev redis-server mysql
+# sudo apt-get install -y postgresql libpq-dev redis-server mysql-server
 
 # If there are problems with font configuration this may help
 #sudo dpkg-reconfigure console-setup

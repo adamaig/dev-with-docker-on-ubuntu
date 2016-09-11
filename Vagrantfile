@@ -27,15 +27,19 @@ class SetupDockerRouting < Vagrant.plugin('2')
     end
 
     def call(env)
+      @app.call(env)
+
       syscall("** Adding *.docker resolver", "sudo bash -c 'mkdir -p /etc/resolver ; echo nameserver #{VM_IP} > /etc/resolver/docker'")
       syscall("** Adding route", "sudo route -n delete 172.17.0.0/16 #{VM_IP}; sudo route -n add 172.17.0.0/16 #{VM_IP}")
 
-      @app.call(env)
+      syscall("** Mounting ubuntu NFS /home/#{USERNAME}/projects to ~/vagrant_projects",
+              "[ ! -f #{ENV.fetch('HOME')}/vagrant_projects ] && mkdir #{ENV.fetch('HOME')}/vagrant_projects ; sudo mount -t nfs -o rw #{VM_IP}:/home/#{USERNAME}/projects #{ENV.fetch('HOME')}/vagrant_projects")
+
     end
   end
 
   action_hook(:setup_docker_routing, :machine_action_up) do |hook|
-    hook.append(SetupDockerRouting::Action)
+    hook.prepend(SetupDockerRouting::Action)
   end
 end
 
@@ -65,7 +69,7 @@ Vagrant.configure("2") do |config|
   # config.vm.synced_folder "../data", "/vagrant_data"
 
   config.vm.provider "virtualbox" do |vb|
-    vb.name = "dev-on-ub2"
+    vb.name = "dev-on-ub"
     # Customize the amount of memory on the VM:
     vb.memory = "4096"
     vb.cpus = 2
@@ -78,7 +82,10 @@ Vagrant.configure("2") do |config|
   config.vm.provision "shell", inline: <<-SHELL
     update-locale LANG="en_US.UTF-8" LC_COLLATE="en_US.UTF-8" LC_CTYPE="en_US.UTF-8" LC_MESSAGES="en_US.UTF-8" LC_MONETARY="en_US.UTF-8" LC_NUMERIC="en_US.UTF-8" LC_TIME="en_US.UTF-8"
     apt-get update -y
-    apt-get install -y vim curl apt-transport-https ca-certificates sqlite network-manager
+
+    apt-get install -y git vim curl sqlite network-manager nfs-kernel-server debconf-utils
+
+    apt-get install -y apt-transport-https ca-certificates
     echo 'deb https://apt.dockerproject.org/repo ubuntu-xenial main' > /etc/apt/sources.list.d/docker.list
     apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
     apt-get purge lxc-docker
@@ -106,6 +113,7 @@ Vagrant.configure("2") do |config|
     { s: "~#{USERNAME}/.ssh/id_rsa", d: "/tmp/id_rsa" },
     { s: "~#{USERNAME}/.ssh/id_rsa.pub", d: "/tmp/id_rsa.pub" },
     { s: "./extras.sh", d: "/tmp/extras.sh" },
+    { s: "./localextras.sh", d: "/tmp/localextras.sh" },
   ].each do |x|
     config.vm.provision "file", source: x[:s], destination: x[:d]
   end
@@ -118,8 +126,15 @@ Vagrant.configure("2") do |config|
     mkdir ~#{USERNAME}/.ssh
     chmod 0700 ~#{USERNAME}/.ssh
     mv /tmp/id_rsa* ~#{USERNAME}/.ssh/
-    mv /tmp/extras.sh ~#{USERNAME}/
+    mv /tmp/extras.sh /tmp/localextras.sh ~#{USERNAME}/
+    mkdir ~#{USERNAME}/projects
+    echo "File from dev-on-ub" > ~#{USERNAME}/projects/README.txt
     chown -R #{USERNAME}: ~#{USERNAME}
+
+    echo "/home/#{USERNAME}/projects 192.168.90.1(rw,sync,no_subtree_check,insecure,anonuid=$(id -u #{USERNAME}),anongid=$(id -g #{USERNAME}),all_squash)" >> /etc/exports
+    service nfs-kernel-server start
+    exportfs -a
+
     sudo -u #{USERNAME} -i bash extras.sh
   SHELL
 
