@@ -9,7 +9,8 @@ VM. This project is a jumping off point.
 - Docker & docker-compose installed and configured
 - Auto-configuration of a limited clone of the user running `vagrant up`. SSH keys
   are copied to a user created with the same name as the host user.
-- NFS mount from guest(ubuntu):~/projects to host:~/vagrant_projects
+- NFS mount from guest(ubuntu):~/projects to host:~/vagrant_projects to allow
+  editing from the host while executing all application code in the guest.
 - Extensible by editing localextras.sh to meet needs of cloned user
 
 # Resizing VBox disks
