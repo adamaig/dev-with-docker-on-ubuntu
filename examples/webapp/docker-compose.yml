@@ -1,0 +1,36 @@
+
+# http://myapp.service.docker OR http://web.myapp.service.docker
+web:
+  build: .
+  container_name: myapp
+  hostname: myapp
+  dns:
+    - 172.17.0.1
+    - 8.8.8.8
+  dns_search: service.docker
+  links:
+    - db
+  volumes:
+    - .:/home/app/webapp:rw
+  env_file:
+    - config/compose-web.env
+  environment:
+    SERVICE_TAGS: web
+    SERVICE_80_NAME: myapp
+    SERVICE_443_IGNORE: "yes"
+
+    PASSENGER_APP_ENV: development
+    RAILS_ENV: development
+    RACK_ENV: development
+
+# tcp://db.myapp.service.docker:5432
+db:
+  image: library/postgres:9.4.6
+  container_name: myapp-db
+  hostname: myapp-db
+  environment:
+    POSTGRES_DB: myapp_development
+    POSTGRES_USER: myapp
+    POSTGRES_PASSWORD: somepassword
+    SERVICE_5432_NAME: myapp
+    SERVICE_TAGS: db

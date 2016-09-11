@@ -1,0 +1,29 @@
+# http://consul.service.docker:8500
+consul:
+  image: consul:v0.6.4
+  container_name: consul
+  hostname: consul
+  command: "agent"
+  ports:
+    - "8400:8400"
+    - "8500:8500"
+    - "53:8600/udp"
+  environment:
+    SERVICE_IGNORE: "yes"
+  volumes:
+    - ./consul.json:/consul/config/config.json
+
+# http://gliderlabs.com/registrator/latest/user/run/
+registrator:
+  image: gliderlabs/registrator:v7
+  container_name: registrator
+  hostname: registrator
+  command: "-internal -cleanup=true -retry-attempts -1 -resync 2 -ttl 10 -ttl-refresh 2 consul://consul:8500"
+  links:
+    - consul
+  volumes:
+    - /var/run/docker.sock:/tmp/docker.sock 
+  dns:
+    - 172.17.0.1
+    - 8.8.8.8
+  dns_search: service.docker

@@ -29,11 +29,25 @@ class SetupDockerRouting < Vagrant.plugin('2')
     def call(env)
       @app.call(env)
 
-      syscall("** Adding *.docker resolver", "sudo bash -c 'mkdir -p /etc/resolver ; echo nameserver #{VM_IP} > /etc/resolver/docker'")
-      syscall("** Adding route", "sudo route -n delete 172.17.0.0/16 #{VM_IP}; sudo route -n add 172.17.0.0/16 #{VM_IP}")
+      syscall("** Setting up routing to .docker domain", <<-EOF
+          echo "** Adding resolver directory"
+          sudo mkdir -p /etc/resolver
 
-      syscall("** Mounting ubuntu NFS /home/#{USERNAME}/projects to ~/vagrant_projects",
-              "[ ! -f #{ENV.fetch('HOME')}/vagrant_projects ] && mkdir #{ENV.fetch('HOME')}/vagrant_projects ; sudo mount -t nfs -o rw #{VM_IP}:/home/#{USERNAME}/projects #{ENV.fetch('HOME')}/vagrant_projects")
+          echo "** Adding *.docker resolver"
+          sudo bash -c "echo nameserver #{VM_IP} > /etc/resolver/docker"
+
+          echo "** Adding routes"
+          sudo route -n delete 172.17.0.0/16 #{VM_IP}
+          sudo route -n add 172.17.0.0/16 #{VM_IP}
+          sudo route -n delete 172.17.0.1/32 #{VM_IP}
+          sudo route -n add 172.17.0.1/32 #{VM_IP}
+      
+          echo "** Mounting ubuntu NFS /home/#{USERNAME}/projects to ~/vagrant_projects"
+          [ ! -f #{ENV.fetch('HOME')}/vagrant_projects ] && mkdir #{ENV.fetch('HOME')}/vagrant_projects
+          sudo mount -t nfs -o rw #{VM_IP}:/home/#{USERNAME}/projects #{ENV.fetch('HOME')}/vagrant_projects
+        EOF
+      )
+
 
     end
   end
@@ -115,6 +129,8 @@ Vagrant.configure("2") do |config|
     { s: "~#{USERNAME}/.ssh/config", d: "/tmp/ssh_config" },
     { s: "./extras.sh", d: "/tmp/extras.sh" },
     { s: "./localextras.sh", d: "/tmp/localextras.sh" },
+    { s: "./consul-registrator-setup/consul.json", d: "/tmp/consul.json" },
+    { s: "./consul-registrator-setup/docker-compose.yml", d: "/tmp/docker-compose.yml" },
   ].each do |x|
     config.vm.provision "file", source: x[:s], destination: x[:d]
   end
@@ -130,6 +146,10 @@ Vagrant.configure("2") do |config|
     mv /tmp/extras.sh /tmp/localextras.sh ~#{USERNAME}/
     mkdir ~#{USERNAME}/projects
     echo "File from dev-on-ub" > ~#{USERNAME}/projects/README.txt
+
+    mkdir ~#{USERNAME}/consul-registrator-setup/
+    mv /tmp/consul.json /tmp/docker-compose.yml ~#{USERNAME}/consul-registrator-setup/
+
     chown -R #{USERNAME}: ~#{USERNAME}
 
     echo "/home/#{USERNAME}/projects 192.168.90.1(rw,sync,no_subtree_check,insecure,anonuid=$(id -u #{USERNAME}),anongid=$(id -g #{USERNAME}),all_squash)" >> /etc/exports

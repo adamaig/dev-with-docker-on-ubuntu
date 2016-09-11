@@ -1,0 +1,13 @@
+{
+  "log_level": "DEBUG",
+  "node_name": "consul",
+  "domain": "docker.",
+  "datacenter": "laptop",
+  "server": true,
+  "bootstrap": true,
+  "client_addr": "0.0.0.0",
+  "ui": true,
+  "bind_addr": "0.0.0.0",
+  "ports": {
+  }
+}
