@@ -31,7 +31,7 @@ The user is the user executing the `vagrant up` command.
 ## Editing
 - Connect to the vagrant guest as the user by either
   1. `vagrant ssh` and then `sudo su -l <username>` in the box, *OR*
-  2. `ssh localhost -p `vagrant ssh-config | awk -e '/Port/ { print $2;}'``
+  2. `ssh localhost -p $(vagrant ssh-config | awk '/Port/ { print $2;}')`
 - Edit files in ~$USER/vagrant_project
 
 ## Using Consul for \*.docker DNS resolution

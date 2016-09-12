@@ -1,7 +1,9 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
-VM_IP="192.168.90.10"
+VM_IP = "192.168.90.10"
+USERNAME = ENV.fetch('USER')
+SHELL = ENV.fetch('SHELL')
 
 require 'open3'
 def syscall(log, cmd)
@@ -41,14 +43,12 @@ class SetupDockerRouting < Vagrant.plugin('2')
           sudo route -n add 172.17.0.0/16 #{VM_IP}
           sudo route -n delete 172.17.0.1/32 #{VM_IP}
           sudo route -n add 172.17.0.1/32 #{VM_IP}
-      
+
           echo "** Mounting ubuntu NFS /home/#{USERNAME}/projects to ~/vagrant_projects"
           [ ! -f #{ENV.fetch('HOME')}/vagrant_projects ] && mkdir #{ENV.fetch('HOME')}/vagrant_projects
           sudo mount -t nfs -o rw #{VM_IP}:/home/#{USERNAME}/projects #{ENV.fetch('HOME')}/vagrant_projects
         EOF
       )
-
-
     end
   end
 
@@ -56,7 +56,6 @@ class SetupDockerRouting < Vagrant.plugin('2')
     hook.prepend(SetupDockerRouting::Action)
   end
 end
-
 
 Vagrant.configure("2") do |config|
   config.vm.box = "bento/ubuntu-16.04"
@@ -88,10 +87,8 @@ Vagrant.configure("2") do |config|
     vb.memory = "4096"
     vb.cpus = 2
     # Display the VirtualBox GUI when booting the machine
-    #vb.gui = true
+    # vb.gui = true
   end
-
-  USERNAME = ENV.fetch('USER')
 
   config.vm.provision "shell", inline: <<-SHELL
     update-locale LANG="en_US.UTF-8" LC_COLLATE="en_US.UTF-8" LC_CTYPE="en_US.UTF-8" LC_MESSAGES="en_US.UTF-8" LC_MONETARY="en_US.UTF-8" LC_NUMERIC="en_US.UTF-8" LC_TIME="en_US.UTF-8"
@@ -137,7 +134,7 @@ Vagrant.configure("2") do |config|
 
   config.vm.provision "shell", inline: <<-SHELL
     apt-get install -y zsh
-    adduser --force-badname --shell=/bin/zsh --disabled-password --gecos "#{USERNAME}" #{USERNAME}
+    adduser --force-badname --shell=/bin/$(basename #{SHELL}) --disabled-password --gecos "#{USERNAME}" #{USERNAME}
     usermod -G docker,admin,sudo #{USERNAME}
     echo "#{USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/#{USERNAME}
     mkdir ~#{USERNAME}/.ssh
@@ -158,6 +155,5 @@ Vagrant.configure("2") do |config|
 
     sudo -u #{USERNAME} -i bash extras.sh
   SHELL
-
 end
 
