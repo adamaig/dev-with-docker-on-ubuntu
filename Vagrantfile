@@ -139,7 +139,8 @@ Vagrant.configure("2") do |config|
     echo "#{USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/#{USERNAME}
     mkdir ~#{USERNAME}/.ssh
     chmod 0700 ~#{USERNAME}/.ssh
-    mv /tmp/id_rsa* /tmp/ssh_config ~#{USERNAME}/.ssh/config
+    mv /tmp/id_rsa* ~#{USERNAME}/.ssh/
+    mv /tmp/ssh_config ~#{USERNAME}/.ssh/config
     mv /tmp/extras.sh /tmp/localextras.sh ~#{USERNAME}/
     mkdir ~#{USERNAME}/projects
     echo "File from dev-on-ub" > ~#{USERNAME}/projects/README.txt
