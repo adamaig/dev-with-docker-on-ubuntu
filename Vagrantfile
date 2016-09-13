@@ -110,14 +110,14 @@ Vagrant.configure("2") do |config|
 
     echo "creating docker group and user"
     groupadd -f docker
-    usermod -aG docker $USER
+    usermod -aG docker vagrant
 
     echo 'GRUB_CMDLINE_LINUX="cgroup_enable=memory swapaccount=1"' >> /etc/default/grub
     service docker start
 
     echo "** Adding ubuntu user to admin group"
     groupadd -f admin
-    usermod -aG admin $USER
+    usermod -aG admin vagrant
   SHELL
 
   [
