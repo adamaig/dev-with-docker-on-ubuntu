@@ -15,12 +15,16 @@ VM. This project is a jumping off point.
 
 # Usage
 
+
+## Terminology
+
 The guest is the Vagrant Ubuntu box.
 The Host is the OSX box where `vagrant up` is run.
 The user is the user executing the `vagrant up` command.
 
 ## Basic setup
 
+- Install vagrant either via download or homebrew.
 - Edit localextras.sh to configure the user's configuration in the guest. You
   may also wish to edit extras.sh
 - In this project directory run `vagrant up`. After a few minutes, the user
