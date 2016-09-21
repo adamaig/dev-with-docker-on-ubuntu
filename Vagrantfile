@@ -115,6 +115,17 @@ Vagrant.configure("2") do |config|
     echo 'GRUB_CMDLINE_LINUX="cgroup_enable=memory swapaccount=1"' >> /etc/default/grub
     service docker start
 
+    echo "** Setting up INSECURE TCP port for docker daemon"
+    mkdir /etc/systemd/system/docker.service.d
+    pushd /etc/systemd/system/docker.service.d
+
+    echo "[Service]" > dev-on-docker-tcp.conf
+    echo "ExecStart=" >> dev-on-docker-tcp.conf
+    echo "ExecStart=/usr/bin/docker daemon -H fd:// -H tcp://#{VM_IP}:2375" >> dev-on-docker-tcp.conf
+
+    popd
+    systemctl daemon-reload
+
     echo "** Adding ubuntu user to admin group"
     groupadd -f admin
     usermod -aG admin vagrant
@@ -155,6 +166,9 @@ Vagrant.configure("2") do |config|
     exportfs -a
 
     sudo -u #{USERNAME} -i bash extras.sh
+
+    echo "** Run 'export DOCKER_HOST=#{VM_IP}:2375' on this host to interact with docker in the vagrant guest"
+    echo "** Note that some things may not work."
   SHELL
 end
 
