@@ -32,10 +32,11 @@ class SetupDockerRouting < Vagrant.plugin('2')
       @app.call(env)
 
       syscall("** Setting up routing to .docker domain", <<-EOF
-          echo "** Adding resolver directory"
-          sudo mkdir -p /etc/resolver
+          echo "** Adding resolver directory if it does not exist"
+          [[ ! -d /etc/resolver ]] && sudo mkdir -p /etc/resolver
 
-          echo "** Adding *.docker resolver"
+          echo "** Adding/Replacing *.docker resolver (replacing to ensure OSX sees the change)"
+          [[ -f /etc/resolver/docker ]] && sudo rm -f /etc/resolver/docker
           sudo bash -c "echo nameserver #{VM_IP} > /etc/resolver/docker"
 
           echo "** Adding routes"
@@ -44,9 +45,13 @@ class SetupDockerRouting < Vagrant.plugin('2')
           sudo route -n delete 172.17.0.1/32 #{VM_IP}
           sudo route -n add 172.17.0.1/32 #{VM_IP}
 
-          echo "** Mounting ubuntu NFS /home/#{USERNAME}/projects to ~/vagrant_projects"
-          [ ! -f #{ENV.fetch('HOME')}/vagrant_projects ] && mkdir #{ENV.fetch('HOME')}/vagrant_projects
-          sudo mount -t nfs -o rw #{VM_IP}:/home/#{USERNAME}/projects #{ENV.fetch('HOME')}/vagrant_projects
+          echo "** Mounting ubuntu NFS /home/#{USERNAME}/vagrant_projects to ~/vagrant_projects"
+          [[ ! -d #{ENV.fetch('HOME')}/vagrant_projects ]] && mkdir #{ENV.fetch('HOME')}/vagrant_projects
+          echo "#!/bin/bash" > ./mount_nfs_share
+          echo "" >> ./mount_nfs_share
+          echo "sudo mount -t nfs -o rw #{VM_IP}:/home/#{USERNAME}/vagrant_projects #{ENV.fetch('HOME')}/vagrant_projects"
+          chmod +x ./mount_nfs_share
+          ./mount_nfs_share
         EOF
       )
     end
@@ -80,12 +85,13 @@ Vagrant.configure("2") do |config|
   # the path on the guest to mount the folder. And the optional third
   # argument is a set of non-required options.
   # config.vm.synced_folder "../data", "/vagrant_data"
+  #config.vm.synced_folder ".", "/vagrant", disabled: true
 
   config.vm.provider "virtualbox" do |vb|
     vb.name = "dev-on-ub"
     # Customize the amount of memory on the VM:
     vb.memory = "4096"
-    vb.cpus = 2
+    vb.cpus = 4
     # Display the VirtualBox GUI when booting the machine
     # vb.gui = true
   end
@@ -153,19 +159,22 @@ Vagrant.configure("2") do |config|
     mv /tmp/id_rsa* ~#{USERNAME}/.ssh/
     mv /tmp/ssh_config ~#{USERNAME}/.ssh/config
     mv /tmp/extras.sh /tmp/localextras.sh ~#{USERNAME}/
-    mkdir ~#{USERNAME}/projects
-    echo "File from dev-on-ub" > ~#{USERNAME}/projects/README.txt
+    mkdir ~#{USERNAME}/vagrant_projects
+    echo "File from dev-on-ub" > ~#{USERNAME}/vagrant_projects/README.txt
 
     mkdir ~#{USERNAME}/consul-registrator-setup/
     mv /tmp/consul.json /tmp/docker-compose.yml ~#{USERNAME}/consul-registrator-setup/
 
     chown -R #{USERNAME}: ~#{USERNAME}
 
-    echo "/home/#{USERNAME}/projects 192.168.90.1(rw,sync,no_subtree_check,insecure,anonuid=$(id -u #{USERNAME}),anongid=$(id -g #{USERNAME}),all_squash)" >> /etc/exports
+    echo "/home/#{USERNAME}/vagrant_projects 192.168.90.1(rw,sync,no_subtree_check,insecure,anonuid=$(id -u #{USERNAME}),anongid=$(id -g #{USERNAME}),all_squash)" >> /etc/exports
     service nfs-kernel-server start
     exportfs -a
 
     sudo -u #{USERNAME} -i bash extras.sh
+
+    echo "** Linking /Users -> /home in the guest. Supports volume mounting in docker-compose"
+    [[ ! -L /Users ]] && ln -s /home /Users
 
     echo "** Run 'export DOCKER_HOST=#{VM_IP}:2375' on this host to interact with docker in the vagrant guest"
     echo "** Note that some things may not work."
