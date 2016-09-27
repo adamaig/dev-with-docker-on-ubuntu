@@ -7,20 +7,30 @@ VM. This project is a jumping off point.
 # Features
 
 - Docker & docker-compose installed and configured
+- Provides a Consul & Registrator setup for DNS communication from host to guest,
+  as well as between containers and projects.
 - Auto-configuration of a limited clone of the user running `vagrant up`. SSH keys
   are copied to a user created with the same name as the host user.
-- NFS mount from guest(ubuntu):~/projects to host:~/vagrant_projects to allow
+- NFS mount from guest(ubuntu):~/vagrant_projects to host:~/vagrant_projects to allow
   editing from the host while executing all application code in the guest.
 - Extensible by editing localextras.sh to meet needs of cloned user
+- Generates script `mount_nfs_share` to remount drive to host if it is disconnected
 
 # Usage
 
-
 ## Terminology
 
-The guest is the Vagrant Ubuntu box.
-The Host is the OSX box where `vagrant up` is run.
-The user is the user executing the `vagrant up` command.
+- The guest is the Vagrant Ubuntu box.
+- The Host is the OSX box where `vagrant up` is run.
+- The user is the user executing the `vagrant up` command.
+
+## Prerequisites
+
+Both vagrant and virtualbox must be available. You may also want to install
+docker and docker-compose in order to run docker commands from the host, but
+*you do not need the docker-machine to be up*. It may cause problems, and has
+not been tested in conjunction with this repo, as this project is an attempt
+to replace the docker-machine.
 
 ## Basic setup
 
@@ -53,6 +63,22 @@ complete the flow.
 At this point you should also be able to ping the service as well. For other
 docker-compose based projects you can make them available by following patterns
 similar the one shown in `examples/webapp/docker-compose.yml`
+
+## Notes on using docker-compose
+
+### Use DOCKER_HOST env var to communicate from host to guest daemon
+
+After provisioning the machine, run `export DOCKER_HOST="tcp://192.168.90.10:2375"`
+in order to allow local docker tools to communicate to the docker daemon on
+the guest.
+
+### In the guest /Users is symlinked to /home
+
+By creating a symlink from /Users to /home in the guest, `docker-compose` files
+that use relative paths for volumes (i.e., `.:/home/app/myapp:rw`) will function
+as expected when paths are expanded on either the host or guest. Note that this
+requires the full path, `/User/<username>/vagrant_projects/path/to/code`, be
+available in both guest and host.
 
 # Assumptions
 

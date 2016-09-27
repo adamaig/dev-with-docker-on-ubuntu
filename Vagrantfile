@@ -49,7 +49,7 @@ class SetupDockerRouting < Vagrant.plugin('2')
           [[ ! -d #{ENV.fetch('HOME')}/vagrant_projects ]] && mkdir #{ENV.fetch('HOME')}/vagrant_projects
           echo "#!/bin/bash" > ./mount_nfs_share
           echo "" >> ./mount_nfs_share
-          echo "sudo mount -t nfs -o rw #{VM_IP}:/home/#{USERNAME}/vagrant_projects #{ENV.fetch('HOME')}/vagrant_projects"
+          echo "sudo mount -t nfs -o rw #{VM_IP}:/home/#{USERNAME}/vagrant_projects #{ENV.fetch('HOME')}/vagrant_projects" >> ./mount_nfs_share
           chmod +x ./mount_nfs_share
           ./mount_nfs_share
         EOF
@@ -176,7 +176,7 @@ Vagrant.configure("2") do |config|
     echo "** Linking /Users -> /home in the guest. Supports volume mounting in docker-compose"
     [[ ! -L /Users ]] && ln -s /home /Users
 
-    echo "** Run 'export DOCKER_HOST=#{VM_IP}:2375' on this host to interact with docker in the vagrant guest"
+    echo "** Run 'export DOCKER_HOST="tcp://#{VM_IP}:2375"' on this host to interact with docker in the vagrant guest"
     echo "** Note that some things may not work."
   SHELL
 end

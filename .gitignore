@@ -1,3 +1,4 @@
 .vagrant
 *.log
 localextras.sh
+mount_nfs_share
