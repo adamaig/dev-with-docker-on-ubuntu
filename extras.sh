@@ -1,8 +1,8 @@
 #!/bin/bash
 
-echo "** INSTALLING zsh, vim, tmux, powerline fonts, Ruby, NodeJS, Go"
+echo "** INSTALLING support software for development"
 sudo apt-get install -y zsh vim tmux fonts-powerline nodejs-legacy ruby \
-  golang-go silversearcher-ag
+  golang-go silversearcher-ag imagemagick
 sudo fc-cache -vf # to activate the fonts: see http://askubuntu.com/questions/283908/how-can-i-install-and-use-powerline-plugin
 
 echo "** INSTALLING oh-my-zsh"
