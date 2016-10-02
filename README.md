@@ -35,6 +35,7 @@ to replace the docker-machine.
 ## Basic setup
 
 - Install vagrant either via download or homebrew.
+- Copy localextras.sh.example to localextras.sh
 - Edit localextras.sh to configure the user's configuration in the guest. You
   may also wish to edit extras.sh
 - In this project directory run `vagrant up`. After a few minutes, the user
