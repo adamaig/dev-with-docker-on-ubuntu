@@ -64,7 +64,7 @@ end
 
 Vagrant.configure("2") do |config|
   config.vm.box = "bento/ubuntu-16.04"
-  config.vm.box_check_update = false
+  config.vm.box_check_update = true
 
   # Create a forwarded port mapping which allows access to a specific port
   # within the machine from a port on the host machine. In the example below,
@@ -97,14 +97,16 @@ Vagrant.configure("2") do |config|
   end
 
   config.vm.provision "shell", inline: <<-SHELL
-    update-locale LANG="en_US.UTF-8" LC_COLLATE="en_US.UTF-8" LC_CTYPE="en_US.UTF-8" LC_MESSAGES="en_US.UTF-8" LC_MONETARY="en_US.UTF-8" LC_NUMERIC="en_US.UTF-8" LC_TIME="en_US.UTF-8"
+    update-locale LANG="en_US.UTF-8" LC_COLLATE="en_US.UTF-8" \
+      LC_CTYPE="en_US.UTF-8" LC_MESSAGES="en_US.UTF-8" \
+      LC_MONETARY="en_US.UTF-8" LC_NUMERIC="en_US.UTF-8" LC_TIME="en_US.UTF-8"
+
     apt-get update -y
-
     apt-get install -y git vim curl sqlite network-manager nfs-kernel-server debconf-utils
-
     apt-get install -y apt-transport-https ca-certificates
+
     echo 'deb https://apt.dockerproject.org/repo ubuntu-xenial main' > /etc/apt/sources.list.d/docker.list
-    apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
+    apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
     apt-get purge lxc-docker
     apt-get update -y
     apt-cache policy docker-engine
@@ -167,6 +169,7 @@ Vagrant.configure("2") do |config|
 
     chown -R #{USERNAME}: ~#{USERNAME}
 
+    apt-get install -y nfs-kernel-server
     echo "/home/#{USERNAME}/vagrant_projects 192.168.90.1(rw,sync,no_subtree_check,insecure,anonuid=$(id -u #{USERNAME}),anongid=$(id -g #{USERNAME}),all_squash)" >> /etc/exports
     service nfs-kernel-server start
     exportfs -a
