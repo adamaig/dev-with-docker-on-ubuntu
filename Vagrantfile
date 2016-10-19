@@ -64,7 +64,8 @@ end
 
 Vagrant.configure("2") do |config|
   config.vm.box = "bento/ubuntu-16.04"
-  config.vm.box_check_update = true
+  config.vm.box_version = "~> 2.3.0"
+  config.vm.box_check_update = false
 
   # Create a forwarded port mapping which allows access to a specific port
   # within the machine from a port on the host machine. In the example below,
@@ -153,8 +154,8 @@ Vagrant.configure("2") do |config|
 
   config.vm.provision "shell", inline: <<-SHELL
     apt-get install -y zsh
-    adduser --force-badname --shell=/bin/$(basename #{SHELL}) --disabled-password --gecos "#{USERNAME}" #{USERNAME}
-    usermod -G docker,admin,sudo #{USERNAME}
+    adduser --force-badname --uid 9999 --shell=/bin/$(basename #{SHELL}) --disabled-password --gecos "#{USERNAME}" #{USERNAME}
+    usermod -G docker,admin,sudo,staff #{USERNAME}
     echo "#{USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/#{USERNAME}
     mkdir ~#{USERNAME}/.ssh
     chmod 0700 ~#{USERNAME}/.ssh
@@ -175,6 +176,9 @@ Vagrant.configure("2") do |config|
     exportfs -a
 
     sudo -u #{USERNAME} -i bash extras.sh
+
+    echo "** Cleaning up old packaged with 'apt autoremove' ... "
+    apt autoremove -y
 
     echo "** Linking /Users -> /home in the guest. Supports volume mounting in docker-compose"
     [[ ! -L /Users ]] && ln -s /home /Users
