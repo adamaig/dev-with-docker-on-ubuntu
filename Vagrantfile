@@ -95,6 +95,9 @@ Vagrant.configure("2") do |config|
     vb.cpus = 4
     # Display the VirtualBox GUI when booting the machine
     # vb.gui = true
+
+    # Set the timesync threshold to 10 seconds, instead of the default 20 minutes.
+    vb.customize ["guestproperty", "set", :id, "/VirtualBox/GuestAdd/VBoxService/--timesync-set-threshold", 10000]
   end
 
   config.vm.provision "shell", inline: <<-SHELL
