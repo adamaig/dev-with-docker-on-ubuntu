@@ -2,6 +2,7 @@
 # vi: set ft=ruby :
 
 VM_IP = "192.168.90.10"
+VM_GATEWAY_IP = "192.168.90.1"
 USERNAME = ENV.fetch('USER')
 SHELL = ENV.fetch('SHELL')
 
@@ -49,7 +50,7 @@ class SetupDockerRouting < Vagrant.plugin('2')
           [[ ! -d #{ENV.fetch('HOME')}/vagrant_projects ]] && mkdir #{ENV.fetch('HOME')}/vagrant_projects
           echo "#!/bin/bash" > ./mount_nfs_share
           echo "" >> ./mount_nfs_share
-          echo "sudo mount -t nfs -o rw #{VM_IP}:/home/#{USERNAME}/vagrant_projects #{ENV.fetch('HOME')}/vagrant_projects" >> ./mount_nfs_share
+          echo "sudo mount -t nfs -o rw,bg,hard,nolocks,intr,sync #{VM_IP}:/home/#{USERNAME}/vagrant_projects #{ENV.fetch('HOME')}/vagrant_projects" >> ./mount_nfs_share
           chmod +x ./mount_nfs_share
           ./mount_nfs_share
         EOF
@@ -174,7 +175,7 @@ Vagrant.configure("2") do |config|
     chown -R #{USERNAME}: ~#{USERNAME}
 
     apt-get install -y nfs-kernel-server
-    echo "/home/#{USERNAME}/vagrant_projects 192.168.90.1(rw,sync,no_subtree_check,insecure,anonuid=$(id -u #{USERNAME}),anongid=$(id -g #{USERNAME}),all_squash)" >> /etc/exports
+    echo "/home/#{USERNAME}/vagrant_projects #{VM_GATEWAY_IP}(rw,sync,no_subtree_check,insecure,anonuid=$(id -u #{USERNAME}),anongid=$(id -g #{USERNAME}),all_squash)" >> /etc/exports
     service nfs-kernel-server start
     exportfs -a
 
