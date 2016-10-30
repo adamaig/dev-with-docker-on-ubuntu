@@ -1,8 +1,18 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
+# VM_IP specifies the port the VM will run on, and the routes
 VM_IP = "192.168.90.10"
+
+# VM_GATEWAY_IP specifies the NFS export access. Corresponds to the host's IP
+# in the vboxnet
 VM_GATEWAY_IP = "192.168.90.1"
+
+# This value should match the port that maps to consul 8600 in the docker-compose
+DOCKER_DNS_PORT = 8600
+
+# This var will be used to configure the user created in the vagrant, and
+# should match the user running the vagrant box
 USERNAME = ENV.fetch('USER')
 SHELL = ENV.fetch('SHELL')
 
@@ -38,7 +48,7 @@ class SetupDockerRouting < Vagrant.plugin('2')
 
           echo "** Adding/Replacing *.docker resolver (replacing to ensure OSX sees the change)"
           [[ -f /etc/resolver/docker ]] && sudo rm -f /etc/resolver/docker
-          sudo bash -c "echo nameserver #{VM_IP} > /etc/resolver/docker"
+          sudo bash -c "printf '%s\n%s\n' 'nameserver #{VM_IP}' 'port #{DOCKER_DNS_PORT}' > /etc/resolver/docker"
 
           echo "** Adding routes"
           sudo route -n delete 172.17.0.0/16 #{VM_IP}

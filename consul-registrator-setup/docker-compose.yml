@@ -7,7 +7,7 @@ consul:
   ports:
     - "8400:8400"
     - "8500:8500"
-    - "53:8600/udp"
+    - "8600:8600/udp"
   environment:
     SERVICE_IGNORE: "yes"
   volumes:
