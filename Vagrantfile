@@ -117,11 +117,12 @@ Vagrant.configure("2") do |config|
       LC_MONETARY="en_US.UTF-8" LC_NUMERIC="en_US.UTF-8" LC_TIME="en_US.UTF-8"
 
     apt-get update -y
-    apt-get install -y git vim curl sqlite network-manager nfs-kernel-server debconf-utils
+    apt-get install -y git vim curl sqlite network-manager dnsmasq nfs-kernel-server debconf-utils
     apt-get install -y apt-transport-https ca-certificates
 
     echo 'deb https://apt.dockerproject.org/repo ubuntu-xenial main' > /etc/apt/sources.list.d/docker.list
     apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
+    apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
     apt-get purge lxc-docker
     apt-get update -y
     apt-cache policy docker-engine
@@ -188,6 +189,15 @@ Vagrant.configure("2") do |config|
     echo "/home/#{USERNAME}/vagrant_projects #{VM_GATEWAY_IP}(rw,sync,no_subtree_check,insecure,anonuid=$(id -u #{USERNAME}),anongid=$(id -g #{USERNAME}),all_squash)" >> /etc/exports
     service nfs-kernel-server start
     exportfs -a
+
+    echo "** Modifying NetworkManager and dnsmasq to support routing to service.docker"
+    if [[ -f /etc/NetworkManager/NetworkManager.conf.pkg ]]; then
+      cp /etc/NetworkManager/NetworkManager.conf /etc/NetworkManager/NetworkManager.conf.pkg
+      cat /etc/NetworkManager/NetworkManager.conf | sed -e 's/dns=dnsmasq/#dns=dnsmasq/' > /etc/NetworkManager/NetworkManager.conf
+    fi
+    echo "server=/.service.docker/127.0.0.1#8600" > /etc/dnsmasq.d/10-docker
+    service network-manager restart
+    service dnsmasq restart
 
     sudo -u #{USERNAME} -i bash extras.sh
 
