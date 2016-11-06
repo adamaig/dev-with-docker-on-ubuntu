@@ -191,11 +191,14 @@ Vagrant.configure("2") do |config|
     exportfs -a
 
     echo "** Modifying NetworkManager and dnsmasq to support routing to service.docker"
-    if [[ -f /etc/NetworkManager/NetworkManager.conf.pkg ]]; then
+    if [[ ! -f /etc/NetworkManager/NetworkManager.conf.pkg ]]; then
       cp /etc/NetworkManager/NetworkManager.conf /etc/NetworkManager/NetworkManager.conf.pkg
-      cat /etc/NetworkManager/NetworkManager.conf | sed -e 's/dns=dnsmasq/#dns=dnsmasq/' > /etc/NetworkManager/NetworkManager.conf
+      cat /etc/NetworkManager/NetworkManager.conf.pkg | sed -e 's/^dns=dnsmasq/#dns=dnsmasq/' > /etc/NetworkManager/NetworkManager.conf
     fi
-    echo "server=/.service.docker/127.0.0.1#8600" > /etc/dnsmasq.d/10-docker
+    echo "listen-address=127.0.0.1" > /etc/dnsmasq.d/10-docker
+    echo "listen-address=172.17.0.1" >> /etc/dnsmasq.d/10-docker
+    echo "listen-address=#{VM_IP}" >> /etc/dnsmasq.d/10-docker
+    echo "server=/.service.docker/127.0.0.1#8600" >> /etc/dnsmasq.d/10-docker
     service network-manager restart
     service dnsmasq restart
 
