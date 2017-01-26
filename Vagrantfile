@@ -75,7 +75,7 @@ end
 
 Vagrant.configure("2") do |config|
   config.vm.box = "bento/ubuntu-16.04"
-  config.vm.box_version = "~> 2.3.0"
+  config.vm.box_version = "= 2.3.0"
   config.vm.box_check_update = true
 
   # Create a forwarded port mapping which allows access to a specific port
@@ -127,7 +127,7 @@ Vagrant.configure("2") do |config|
     apt-get update -y
     apt-cache policy docker-engine
     apt-get install -y linux-image-extra-$(uname -r) linux-image-extra-virtual
-    apt-get install -y docker-engine
+    apt-get install -y docker-engine=1.12.6-0~ubuntu-xenial
 
     curl -L https://github.com/docker/compose/releases/download/1.8.0/docker-compose-`uname -s`-`uname -m` > /usr/local/bin/docker-compose
     chmod +x /usr/local/bin/docker-compose
