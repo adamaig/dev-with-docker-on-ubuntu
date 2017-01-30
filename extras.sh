@@ -2,7 +2,7 @@
 
 echo "** INSTALLING support software for development"
 sudo apt-get install -y zsh vim tmux fonts-powerline nodejs-legacy ruby \
-  golang-go silversearcher-ag imagemagick xauth \
+  golang-go silversearcher-ag imagemagick xauth xclip \
   mysql-client postgresql-client
 
 echo "** Support for AWS CLIs"
