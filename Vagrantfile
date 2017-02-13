@@ -192,7 +192,7 @@ Vagrant.configure("2") do |config|
 
     echo "** Modifying NetworkManager and dnsmasq to support routing to service.docker"
     sed -e 's/.*bind-interfaces/# bind-interfaces/' -i /etc/dnsmasq.d/network-manager
-    sed -e 's/.*dns=dnsmasq/# dns=dnsmasq/' -i /etc/NetworkManager/NetworkManager.conf.pkg
+    sed -e 's/.*dns=dnsmasq/# dns=dnsmasq/' -i /etc/NetworkManager/NetworkManager.conf
 
     echo "listen-address=127.0.0.1" > /etc/dnsmasq.d/10-docker
     echo "listen-address=172.17.0.1" >> /etc/dnsmasq.d/10-docker
