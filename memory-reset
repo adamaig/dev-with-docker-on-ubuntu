@@ -1,16 +1,17 @@
 #!/bin/sh
 
-#vagrant box is out of memory
+#when vagrant box is out of memory space  ssh localhost -p 2222
 
-set -e
+#set -e will stop script and raise error if any lines fail
+#set -o pipefail 
 
-echo "removing unusued volumes"
+echo "** Current Status"
+df -h
+#docker ps -a --format 'table {{.ID}}\t{{.Names}}\t{{.Status}}'
+
+echo "** Removing unused images"
+docker images | awk 'NR>1 { if ($1 == "<none>") print $3; else print $1":"$2 }' | sort | xargs --no-run-if-empty docker rmi
+
+echo "** Removing unusued volumes"
 docker volume rm $(docker volume ls -qf dangling=true)
 
-echo "removing unused images"
-docker rmi $(docker images -f dangling=true -q)
-
- #if [docker volume ls -f dangling=true -q] ; then
-  #echo "** Removing unused images"
-  #docker rmi $(docker images -f dangling=true -q)
- #fi
