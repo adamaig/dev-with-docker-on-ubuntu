@@ -1,0 +1,16 @@
+#!/bin/sh
+
+#vagrant box is out of memory
+
+set -e
+
+echo "removing unusued volumes"
+docker volume rm $(docker volume ls -qf dangling=true)
+
+echo "removing unused images"
+docker rmi $(docker images -f dangling=true -q)
+
+ #if [docker volume ls -f dangling=true -q] ; then
+  #echo "** Removing unused images"
+  #docker rmi $(docker images -f dangling=true -q)
+ #fi
