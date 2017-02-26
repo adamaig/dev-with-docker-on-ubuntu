@@ -108,7 +108,6 @@ Vagrant.configure("2") do |config|
     # vb.gui = true
 
     # Set the timesync threshold to 10 seconds, instead of the default 20 minutes.
-    vb.customize ["guestproperty", "set", :id, "/VirtualBox/GuestAdd/VBoxService/--timesync-set-threshold", 10000]
   end
 
   config.vm.provision "shell", inline: <<-SHELL
@@ -117,8 +116,10 @@ Vagrant.configure("2") do |config|
       LC_MONETARY="en_US.UTF-8" LC_NUMERIC="en_US.UTF-8" LC_TIME="en_US.UTF-8"
 
     apt-get update -y
-    apt-get install -y git vim curl sqlite network-manager dnsmasq nfs-kernel-server debconf-utils
+    apt-get install -y ntp git vim curl sqlite network-manager dnsmasq nfs-kernel-server debconf-utils
     apt-get install -y apt-transport-https ca-certificates
+
+    service ntp restart
 
     echo 'deb https://apt.dockerproject.org/repo ubuntu-xenial main' > /etc/apt/sources.list.d/docker.list
     apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
@@ -139,13 +140,16 @@ Vagrant.configure("2") do |config|
     echo 'GRUB_CMDLINE_LINUX="cgroup_enable=memory swapaccount=1"' >> /etc/default/grub
     service docker start
 
-    echo "** Setting up INSECURE TCP port for docker daemon"
+    echo "** Setting up systemd dropin config for docker daemon"
     mkdir /etc/systemd/system/docker.service.d
     pushd /etc/systemd/system/docker.service.d
 
-    echo "[Service]" > dev-on-docker-tcp.conf
+    echo "[Unit]" > dev-on-docker-tcp.conf
+    echo "Before=dnsmasq.service" >> dev-on-docker-tcp.conf
+    echo "[Service]" >> dev-on-docker-tcp.conf
     echo "ExecStart=" >> dev-on-docker-tcp.conf
     echo "ExecStart=/usr/bin/docker daemon -H fd:// -H tcp://#{VM_IP}:2375" >> dev-on-docker-tcp.conf
+    echo "ExecStartPost=/sbin/iptables -P FORWARD ACCEPT" >>  dev-on-docker-tcp.conf
 
     popd
     systemctl daemon-reload
