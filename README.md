@@ -46,7 +46,7 @@ to replace the docker-machine.
 ## Editing
 - Connect to the vagrant guest as the user by either
   1. `vagrant ssh` and then `sudo su -l <username>` in the box, *OR*
-  2. `ssh localhost -p $(vagrant ssh-config | awk '/Port/ { print $2;}')`
+  2. `ssh localhost -X -p $(vagrant ssh-config | awk '/Port/ { print $2;}')`
 - Edit files in ~$USER/vagrant_project
 
 ## Using Consul for \*.docker DNS resolution
@@ -112,4 +112,33 @@ VBoxManage storageattach udev --storagectl SATA --port 0 --device 0 \
   --type hdd --medium /path/to/clone.vdi
 ```
 
+# Clipboard Support
+For Mac, in order to use the clipboard across the host and the guest vagrant box, you must:
 
+1. Download and run [XQuartz](https://www.xquartz.org/)
+1. Forward X11 in your ssh connection:
+
+  ```shell
+    Host localhost
+      ...
+      ForwardX11 yes
+  ```
+  or pass the `-X` flag to the ssh connection string
+
+  ```ssh user@host -X```
+
+## Add Support for `pbcopy` and `pbpaste`
+If you prefer to use `pbcopy` and `pbpaste` within the vagrant box just add the following to your shell config.
+```shell
+# .zshrc or .bashrc
+alias pbcopy='xclip -selection clipboard'
+alias pbpaste='xclip -selection clipboard -o'
+```
+
+## Add Clipboard Support to Tmux
+
+```shell
+# .tmux.conf
+if-shell "uname -n | grep vagrant" \
+  'bind-key -t vi-copy Enter copy-pipe "xclip -in -selection clipboard"'
+```
