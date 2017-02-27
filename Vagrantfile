@@ -10,6 +10,8 @@ VM_GATEWAY_IP = "192.168.90.1"
 
 # This value should match the port that maps to consul 8600 in the docker-compose
 DOCKER_DNS_PORT = 8600
+DOCKER_ENGINE_VERSION="1.13.1-0"
+DOCKER_COMPOSE_VERSION="1.11.2"
 
 # This var will be used to configure the user created in the vagrant, and
 # should match the user running the vagrant box
@@ -109,8 +111,6 @@ Vagrant.configure("2") do |config|
     vb.cpus = 4
     # Display the VirtualBox GUI when booting the machine
     # vb.gui = true
-
-    # Set the timesync threshold to 10 seconds, instead of the default 20 minutes.
   end
 
   config.vm.provision "shell", inline: <<-SHELL
@@ -118,30 +118,30 @@ Vagrant.configure("2") do |config|
       LC_CTYPE="en_US.UTF-8" LC_MESSAGES="en_US.UTF-8" \
       LC_MONETARY="en_US.UTF-8" LC_NUMERIC="en_US.UTF-8" LC_TIME="en_US.UTF-8"
 
+    echo "*** Running setup from docker installation"
+    apt-get install -y --no-install-recommends \
+      apt-transport-https ca-certificates curl software-properties-common
+    curl -fsSL https://apt.dockerproject.org/gpg | sudo apt-key add -
+    add-apt-repository "deb https://apt.dockerproject.org/repo/ ubuntu-$(lsb_release -cs) main"
+
     apt-get update -y
-    apt-get install -y ntp git vim curl sqlite network-manager dnsmasq nfs-kernel-server debconf-utils
-    apt-get install -y apt-transport-https ca-certificates
+    apt-get install -y ntp git vim sqlite debconf-utils \
+      network-manager dnsmasq nfs-kernel-server \
+      docker-engine=#{DOCKER_ENGINE_VERSION}-ubuntu-$(lsb_release -cs)
 
-    service ntp restart
-
-    echo 'deb https://apt.dockerproject.org/repo ubuntu-xenial main' > /etc/apt/sources.list.d/docker.list
-    apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
-    apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
-    apt-get purge lxc-docker
-    apt-get update -y
-    apt-cache policy docker-engine
-    apt-get install -y linux-image-extra-$(uname -r) linux-image-extra-virtual
-    apt-get install -y docker-engine=1.12.6-0~ubuntu-xenial
-
-    curl -L https://github.com/docker/compose/releases/download/1.8.0/docker-compose-`uname -s`-`uname -m` > /usr/local/bin/docker-compose
+    curl -L https://github.com/docker/compose/releases/download/#{DOCKER_COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` > /usr/local/bin/docker-compose
     chmod +x /usr/local/bin/docker-compose
 
-    echo "creating docker group and user"
-    groupadd -f docker
-    usermod -aG docker vagrant
-
     echo 'GRUB_CMDLINE_LINUX="cgroup_enable=memory swapaccount=1"' >> /etc/default/grub
-    service docker start
+
+    echo "** Modifying NetworkManager and dnsmasq to support routing to service.docker"
+    sed -e 's/.*bind-interfaces/# bind-interfaces/' -i /etc/dnsmasq.d/network-manager
+    sed -e 's/.*dns=dnsmasq/# dns=dnsmasq/' -i /etc/NetworkManager/NetworkManager.conf
+
+    echo "listen-address=127.0.0.1" > /etc/dnsmasq.d/10-docker
+    echo "listen-address=172.17.0.1" >> /etc/dnsmasq.d/10-docker
+    echo "listen-address=#{VM_IP}" >> /etc/dnsmasq.d/10-docker
+    echo "server=/.service.docker/127.0.0.1#8600" >> /etc/dnsmasq.d/10-docker
 
     echo "** Setting up systemd dropin config for docker daemon"
     mkdir /etc/systemd/system/docker.service.d
@@ -155,11 +155,19 @@ Vagrant.configure("2") do |config|
     echo "ExecStartPost=/sbin/iptables -P FORWARD ACCEPT" >>  dev-on-docker-tcp.conf
 
     popd
+
     systemctl daemon-reload
 
-    echo "** Adding ubuntu user to admin group"
+    service ntp restart
+    service nfs-kernel-server start
+    service network-manager restart
+    service dnsmasq restart
+    service docker start
+
+    echo "creating admin and docker groups, adding vagrant user"
+    groupadd -f docker
     groupadd -f admin
-    usermod -aG admin vagrant
+    usermod -aG admin,docker vagrant
   SHELL
 
   [
@@ -192,22 +200,8 @@ Vagrant.configure("2") do |config|
 
     chown -R #{USERNAME}: ~#{USERNAME}
 
-    apt-get install -y nfs-kernel-server
     echo "/home/#{USERNAME}/vagrant_projects #{VM_GATEWAY_IP}(rw,sync,no_subtree_check,insecure,anonuid=$(id -u #{USERNAME}),anongid=$(id -g #{USERNAME}),all_squash)" >> /etc/exports
-    service nfs-kernel-server start
     exportfs -a
-
-    echo "** Modifying NetworkManager and dnsmasq to support routing to service.docker"
-    sed -e 's/.*bind-interfaces/# bind-interfaces/' -i /etc/dnsmasq.d/network-manager
-    sed -e 's/.*dns=dnsmasq/# dns=dnsmasq/' -i /etc/NetworkManager/NetworkManager.conf
-
-    echo "listen-address=127.0.0.1" > /etc/dnsmasq.d/10-docker
-    echo "listen-address=172.17.0.1" >> /etc/dnsmasq.d/10-docker
-    echo "listen-address=#{VM_IP}" >> /etc/dnsmasq.d/10-docker
-    echo "server=/.service.docker/127.0.0.1#8600" >> /etc/dnsmasq.d/10-docker
-
-    service network-manager restart
-    service dnsmasq restart
 
     sudo -u #{USERNAME} -i bash extras.sh
 
