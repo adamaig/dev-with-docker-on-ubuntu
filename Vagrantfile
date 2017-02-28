@@ -1,19 +1,22 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
+# Specifies the docker-engine apt package version
 DOCKER_ENGINE_VERSION="1.13.1-0"
+# Specifies the docker-compose release version
 DOCKER_COMPOSE_VERSION="1.11.2"
 
 # VM_NAME specifies the box name that will appear in virtualbox.
-VM_NAME = "docdev-tmp"
+VM_NAME = "dev-on-ub"
 
 # VM_IP specifies the port the VM will run on, and the routes
-VM_IP = "192.168.90.11"
+VM_IP = "192.168.90.10"
 
 # VM_GATEWAY_IP specifies the NFS export access. Corresponds to the host's IP
 # in the vboxnet
 VM_GATEWAY_IP = "192.168.90.1"
 
+# Used to configure the docker-engine bridge network and OSX routes
 DOCKER_BRIDGE_IP = "172.20.0.1"
 DOCKER_SUBNET_IP = "172.20.0.0"
 DOCKER_SUBNET_MASK = "16"
@@ -24,12 +27,12 @@ DOCKER_SUBNET_CIDR = "#{DOCKER_SUBNET_IP}/#{DOCKER_SUBNET_MASK}"
 DOCKER_BRIDGE_CIDR = "#{DOCKER_BRIDGE_IP}/#{DOCKER_SUBNET_MASK}"
 
 # This value should match the port that maps to consul 8600 in the docker-compose
-DOCKER_DNS_PORT = 8600
+CONSUL_DNS_PORT = 8600
 # Used by dnsmasq for to route dns queries to consul
-CONSUL_DOMAIN = "doctmp"
+CONSUL_DOMAIN = "docker"
 
 # Name of the directory used for the NFS mount
-NFS_MOUNT_DIRNAME = "vproj_tmp"
+NFS_MOUNT_DIRNAME = "vagrant_projects"
 
 # This var will be used to configure the user created in the vagrant, and
 # should match the user running the vagrant box
@@ -38,12 +41,12 @@ SHELL = ENV.fetch('SHELL')
 
 # These HEREDOCs are additional config files used to setup the docker development
 # environment and dns lookups
-dnsmasq_docker_conf = <<EOF_dnsmasq_docker_conf
+dnsmasq_docker_conf = <<EOF
 listen-address=127.0.0.1
 listen-address=#{DOCKER_BRIDGE_IP}
 listen-address=#{VM_IP}
-server=/.service.#{CONSUL_DOMAIN}/127.0.0.1#8600
-EOF_dnsmasq_docker_conf
+server=/.service.#{CONSUL_DOMAIN}/127.0.0.1##{CONSUL_DNS_PORT}
+EOF
 
 # The systemd dropin config for the docker service
 docker_drop_in_conf = <<EOF
@@ -66,7 +69,7 @@ echo '** Adding resolver directory if it does not exist'
 
 echo '** Adding/Replacing *.docker resolver (replacing to ensure OSX sees the change)'
 [[ -f /etc/resolver/#{CONSUL_DOMAIN} ]] && sudo rm -f /etc/resolver/#{CONSUL_DOMAIN}
-sudo bash -c "printf '%s\n%s\n' 'nameserver #{VM_IP}' 'port #{DOCKER_DNS_PORT}' > /etc/resolver/#{CONSUL_DOMAIN}"
+sudo bash -c "printf '%s\n%s\n' 'nameserver #{VM_IP}' > /etc/resolver/#{CONSUL_DOMAIN}"
 
 echo '** Adding routes'
 sudo route -n delete #{DOCKER_SUBNET_CIDR} #{VM_IP}
