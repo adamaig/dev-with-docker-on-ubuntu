@@ -17,8 +17,8 @@ VM_IP = "192.168.90.10"
 VM_GATEWAY_IP = "192.168.90.1"
 
 # Used to configure the docker-engine bridge network and OSX routes
-DOCKER_BRIDGE_IP = "172.20.0.1"
-DOCKER_SUBNET_IP = "172.20.0.0"
+DOCKER_BRIDGE_IP = "172.17.0.1"
+DOCKER_SUBNET_IP = "172.17.0.0"
 DOCKER_SUBNET_MASK = "16"
 
 # Specifies the OSX route to the docker subnet
@@ -168,7 +168,7 @@ Vagrant.configure("2") do |config|
 
     echo "** Setting up systemd drop-in config for docker daemon"
     mkdir /etc/systemd/system/docker.service.d
-    echo "#{docker_drop_in_conf }" > /etc/systemd/system/docker.service.d/dev-on-docker.conf
+    echo "#{docker_drop_in_conf}" > /etc/systemd/system/docker.service.d/dev-on-docker.conf
 
     echo "Reloading systemclt configs and restarting services"
     systemctl daemon-reload
