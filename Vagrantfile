@@ -6,11 +6,14 @@ DOCKER_ENGINE_VERSION="1.13.1-0"
 # Specifies the docker-compose release version
 DOCKER_COMPOSE_VERSION="1.11.2"
 
+# Set this to true in order to enable the gui and install necessary packages
+ENABLE_GUI = true
+
 # VM_NAME specifies the box name that will appear in virtualbox.
-VM_NAME = "dev-on-ub"
+VM_NAME = "dev-on-ub2"
 
 # VM_IP specifies the port the VM will run on, and the routes
-VM_IP = "192.168.90.10"
+VM_IP = "192.168.90.11"
 
 # VM_GATEWAY_IP specifies the NFS export access. Corresponds to the host's IP
 # in the vboxnet
@@ -29,10 +32,10 @@ DOCKER_BRIDGE_CIDR = "#{DOCKER_BRIDGE_IP}/#{DOCKER_SUBNET_MASK}"
 # This value should match the port that maps to consul 8600 in the docker-compose
 CONSUL_DNS_PORT = 8600
 # Used by dnsmasq for to route dns queries to consul
-CONSUL_DOMAIN = "docker"
+CONSUL_DOMAIN = "docker2"
 
 # Name of the directory used for the NFS mount
-NFS_MOUNT_DIRNAME = "vagrant_projects"
+NFS_MOUNT_DIRNAME = "vagrant_projects_2"
 
 # This var will be used to configure the user created in the vagrant, and
 # should match the user running the vagrant box
@@ -137,6 +140,12 @@ Vagrant.configure("2") do |config|
     vb.name = "#{VM_NAME}"
     vb.memory = "4096" # GB
     vb.cpus = 4
+    if ENABLE_GUI
+      vb.gui = ENABLE_GUI
+      vb.customize ["modifyvm", :id, "--vram", "128"]
+      vb.customize ["modifyvm", :id, "--accelerate3d", "on"]
+      vb.memory = 2*4096 # GB
+    end
   end
 
   config.vm.provision "shell", inline: <<-SHELL
@@ -234,5 +243,13 @@ Vagrant.configure("2") do |config|
     echo "** Run 'export DOCKER_HOST="tcp://#{VM_IP}:2375"' on this host to interact with docker in the vagrant guest"
     echo "** Note that some things may not work."
   SHELL
+
+  if ENABLE_GUI
+    config.vm.provision "file", source: "./enable_gui.sh", destination: "/tmp/enable_gui.sh"
+    config.vm.provision "shell", inline: <<-SHELL
+      mv /tmp/enable_gui.sh ~#{USERNAME}/
+      sudo -u #{USERNAME} -i bash enable_gui.sh
+    SHELL
+  end
 end
 
