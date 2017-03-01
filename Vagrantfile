@@ -1,5 +1,37 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
+require 'yaml'
+require 'erb'
+require 'pp'
+
+# Default configuration options
+config_options = {
+  "user" => {"username" => ENV.fetch('USER'), "shell" => ENV.fetch('SHELL')},
+  "enable_gui" => false,
+  "vm" => {"name" => "dev-on-ub", "ip" => "192.168.90.10", "gateway_ip" => "192.168.90.1"},
+  "docker" => {"bridge_ip" => "172.17.0.1", "subnet_ip" => "172.20.0.0", "subnet_mask" => 16},
+  "consul" => {"dns_port" => 8600, "domain" => "docker"},
+  "nfs" => {"directory_name" => "vagrant_projects"}
+}
+class Hash
+  def options_merge(other)
+    self.merge(other) do |key, self_v, other_v|
+      if self_v.is_a?(Hash)
+        self_v.options_merge(other_v)
+      else
+        other_v ? other_v : self_v
+      end
+    end
+  end
+end
+# Read option file if it exists
+if File.exist?("config.yml")
+  config_yaml = YAML.load(ERB.new(File.read("config.yml")).result)
+  #config_options.merge!()
+  config_options = config_options.options_merge(config_yaml)
+  puts "** Running with options:"
+  pp config_options
+end
 
 # Specifies the docker-engine apt package version
 DOCKER_ENGINE_VERSION="1.13.1-0"
@@ -7,22 +39,22 @@ DOCKER_ENGINE_VERSION="1.13.1-0"
 DOCKER_COMPOSE_VERSION="1.11.2"
 
 # Set this to true in order to enable the gui and install necessary packages
-ENABLE_GUI = true
+ENABLE_GUI = config_options["enable_gui"]
 
 # VM_NAME specifies the box name that will appear in virtualbox.
-VM_NAME = "dev-on-ub2"
+VM_NAME = config_options["vm"]["name"]
 
 # VM_IP specifies the port the VM will run on, and the routes
-VM_IP = "192.168.90.11"
+VM_IP = config_options["vm"]["ip"]
 
 # VM_GATEWAY_IP specifies the NFS export access. Corresponds to the host's IP
 # in the vboxnet
-VM_GATEWAY_IP = "192.168.90.1"
+VM_GATEWAY_IP = config_options["vm"]["gateway_ip"]
 
-# Used to configure the docker-engine bridge network and OSX routes
-DOCKER_BRIDGE_IP = "172.17.0.1"
-DOCKER_SUBNET_IP = "172.17.0.0"
-DOCKER_SUBNET_MASK = "16"
+# Used to config_optionsure the docker-engine bridge network and OSX routes
+DOCKER_BRIDGE_IP = config_options["docker"]["bridge_ip"]
+DOCKER_SUBNET_IP = config_options["docker"]["subnet_ip"]
+DOCKER_SUBNET_MASK = config_options["docker"]["subnet_mask"]
 
 # Specifies the OSX route to the docker subnet
 DOCKER_SUBNET_CIDR = "#{DOCKER_SUBNET_IP}/#{DOCKER_SUBNET_MASK}"
@@ -30,17 +62,17 @@ DOCKER_SUBNET_CIDR = "#{DOCKER_SUBNET_IP}/#{DOCKER_SUBNET_MASK}"
 DOCKER_BRIDGE_CIDR = "#{DOCKER_BRIDGE_IP}/#{DOCKER_SUBNET_MASK}"
 
 # This value should match the port that maps to consul 8600 in the docker-compose
-CONSUL_DNS_PORT = 8600
+CONSUL_DNS_PORT = config_options["consul"]["dns_port"]
 # Used by dnsmasq for to route dns queries to consul
-CONSUL_DOMAIN = "docker2"
+CONSUL_DOMAIN = config_options["consul"]["domain"]
 
 # Name of the directory used for the NFS mount
-NFS_MOUNT_DIRNAME = "vagrant_projects_2"
+NFS_MOUNT_DIRNAME = config_options["nfs"]["directory_name"]
 
 # This var will be used to configure the user created in the vagrant, and
 # should match the user running the vagrant box
-USERNAME = ENV.fetch('USER')
-SHELL = ENV.fetch('SHELL')
+USERNAME = config_options["user"]["username"]
+SHELL = config_options["user"]["shell"]
 
 # These HEREDOCs are additional config files used to setup the docker development
 # environment and dns lookups
