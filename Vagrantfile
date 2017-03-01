@@ -8,7 +8,17 @@ require 'pp'
 config_options = {
   "user" => {"username" => ENV.fetch('USER'), "shell" => ENV.fetch('SHELL')},
   "enable_gui" => false,
-  "vm" => {"name" => "dev-on-ub", "ip" => "192.168.90.10", "gateway_ip" => "192.168.90.1"},
+  "vm" => {
+    "name" => "dev-on-ub",
+    "ip" => "192.168.90.10",
+    "gateway_ip" => "192.168.90.1",
+    "cpus" => 4,
+    "memory" => 4096,
+    "vram" => 64,
+    "accelerate_3d" => "off",
+    "clipboard" => "bidirectional",
+    "draganddrop" => "bidirectioal"
+  },
   "docker" => {"bridge_ip" => "172.17.0.1", "subnet_ip" => "172.20.0.0", "subnet_mask" => 16},
   "consul" => {"dns_port" => 8600, "domain" => "docker"},
   "nfs" => {"directory_name" => "vagrant_projects"}
@@ -170,13 +180,14 @@ Vagrant.configure("2") do |config|
 
   config.vm.provider "virtualbox" do |vb|
     vb.name = "#{VM_NAME}"
-    vb.memory = "4096" # GB
-    vb.cpus = 4
+    vb.memory = config["vm"]["memory"]
+    vb.cpus = config["vm"]["cpus"]
     if ENABLE_GUI
       vb.gui = ENABLE_GUI
-      vb.customize ["modifyvm", :id, "--vram", "128"]
-      vb.customize ["modifyvm", :id, "--accelerate3d", "on"]
-      vb.memory = 2*4096 # GB
+      vb.customize ["modifyvm", :id, "--vram", config["vm"]["vram"]]
+      vb.customize ["modifyvm", :id, "--accelerate3d", config["vm"]["accelerate_3d"]]
+      vb.customize ["modifyvm", :id, "--clipboard", config["vm"]["clipboard"]]
+      vb.customize ["modifyvm", :id, "--draganddrop", config["vm"]["draganddrop"]]
     end
   end
 
