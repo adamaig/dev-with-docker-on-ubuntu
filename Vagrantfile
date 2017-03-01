@@ -17,7 +17,7 @@ config_options = {
     "vram" => 64,
     "accelerate_3d" => "off",
     "clipboard" => "bidirectional",
-    "draganddrop" => "bidirectioal"
+    "draganddrop" => "bidirectional"
   },
   "docker" => {"bridge_ip" => "172.17.0.1", "subnet_ip" => "172.20.0.0", "subnet_mask" => 16},
   "consul" => {"dns_port" => 8600, "domain" => "docker"},
@@ -180,14 +180,14 @@ Vagrant.configure("2") do |config|
 
   config.vm.provider "virtualbox" do |vb|
     vb.name = "#{VM_NAME}"
-    vb.memory = config["vm"]["memory"]
-    vb.cpus = config["vm"]["cpus"]
+    vb.memory = config_options["vm"]["memory"]
+    vb.cpus = config_options["vm"]["cpus"]
     if ENABLE_GUI
       vb.gui = ENABLE_GUI
-      vb.customize ["modifyvm", :id, "--vram", config["vm"]["vram"]]
-      vb.customize ["modifyvm", :id, "--accelerate3d", config["vm"]["accelerate_3d"]]
-      vb.customize ["modifyvm", :id, "--clipboard", config["vm"]["clipboard"]]
-      vb.customize ["modifyvm", :id, "--draganddrop", config["vm"]["draganddrop"]]
+      vb.customize ["modifyvm", :id, "--vram", config_options["vm"]["vram"]]
+      vb.customize ["modifyvm", :id, "--accelerate3d", config_options["vm"]["accelerate_3d"]]
+      vb.customize ["modifyvm", :id, "--clipboard", config_options["vm"]["clipboard"]]
+      vb.customize ["modifyvm", :id, "--draganddrop", config_options["vm"]["draganddrop"]]
     end
   end
 
