@@ -17,7 +17,7 @@ config_options = {
     "vram" => 64,
     "accelerate_3d" => "off",
     "clipboard" => "bidirectional",
-    "draganddrop" => "bidirectional"
+    "draganddrop" => "hosttoguest"
   },
   "docker" => {"bridge_ip" => "172.17.0.1", "subnet_ip" => "172.20.0.0", "subnet_mask" => 16},
   "consul" => {"dns_port" => 8600, "domain" => "docker"},

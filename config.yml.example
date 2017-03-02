@@ -12,7 +12,7 @@ vm:
   vram: 64
   accelerate_3d: on
   clipboard: bidirectional
-  draganddrop: bidirectional
+  draganddrop: hosttoguest
 docker:
   bridge_ip: 172.20.0.1
   subnet_ip: 172.20.0.0
