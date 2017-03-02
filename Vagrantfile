@@ -1,36 +1,133 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
+require 'yaml'
+require 'erb'
+require 'pp'
+
+# Default configuration options
+config_options = {
+  "user" => {"username" => ENV.fetch('USER'), "shell" => ENV.fetch('SHELL')},
+  "enable_gui" => false,
+  "vm" => {
+    "name" => "dev-on-ub",
+    "ip" => "192.168.90.10",
+    "gateway_ip" => "192.168.90.1",
+    "cpus" => 4,
+    "memory" => 4096,
+    "vram" => 64,
+    "accelerate_3d" => "off",
+    "clipboard" => "bidirectional",
+    "draganddrop" => "hosttoguest"
+  },
+  "docker" => {"bridge_ip" => "172.17.0.1", "subnet_ip" => "172.20.0.0", "subnet_mask" => 16},
+  "consul" => {"dns_port" => 8600, "domain" => "docker"},
+  "nfs" => {"directory_name" => "vagrant_projects"}
+}
+class Hash
+  def options_merge(other)
+    self.merge(other) do |key, self_v, other_v|
+      if self_v.is_a?(Hash)
+        self_v.options_merge(other_v)
+      else
+        other_v ? other_v : self_v
+      end
+    end
+  end
+end
+# Read option file if it exists
+if File.exist?("config.yml")
+  config_yaml = YAML.load(ERB.new(File.read("config.yml")).result)
+  #config_options.merge!()
+  config_options = config_options.options_merge(config_yaml)
+  puts "** Running with options:"
+  pp config_options
+end
+
+# Specifies the docker-engine apt package version
+DOCKER_ENGINE_VERSION="1.13.1-0"
+# Specifies the docker-compose release version
+DOCKER_COMPOSE_VERSION="1.11.2"
+
+# Set this to true in order to enable the gui and install necessary packages
+ENABLE_GUI = config_options["enable_gui"]
+
+# VM_NAME specifies the box name that will appear in virtualbox.
+VM_NAME = config_options["vm"]["name"]
 
 # VM_IP specifies the port the VM will run on, and the routes
-VM_IP = "192.168.90.10"
+VM_IP = config_options["vm"]["ip"]
 
 # VM_GATEWAY_IP specifies the NFS export access. Corresponds to the host's IP
 # in the vboxnet
-VM_GATEWAY_IP = "192.168.90.1"
+VM_GATEWAY_IP = config_options["vm"]["gateway_ip"]
+
+# Used to config_optionsure the docker-engine bridge network and OSX routes
+DOCKER_BRIDGE_IP = config_options["docker"]["bridge_ip"]
+DOCKER_SUBNET_IP = config_options["docker"]["subnet_ip"]
+DOCKER_SUBNET_MASK = config_options["docker"]["subnet_mask"]
+
+# Specifies the OSX route to the docker subnet
+DOCKER_SUBNET_CIDR = "#{DOCKER_SUBNET_IP}/#{DOCKER_SUBNET_MASK}"
+# Used to specify subet used by the docker engine bridge network
+DOCKER_BRIDGE_CIDR = "#{DOCKER_BRIDGE_IP}/#{DOCKER_SUBNET_MASK}"
 
 # This value should match the port that maps to consul 8600 in the docker-compose
-DOCKER_DNS_PORT = 8600
+CONSUL_DNS_PORT = config_options["consul"]["dns_port"]
+# Used by dnsmasq for to route dns queries to consul
+CONSUL_DOMAIN = config_options["consul"]["domain"]
+
+# Name of the directory used for the NFS mount
+NFS_MOUNT_DIRNAME = config_options["nfs"]["directory_name"]
 
 # This var will be used to configure the user created in the vagrant, and
 # should match the user running the vagrant box
-USERNAME = ENV.fetch('USER')
-SHELL = ENV.fetch('SHELL')
+USERNAME = config_options["user"]["username"]
+SHELL = config_options["user"]["shell"]
+
+# These HEREDOCs are additional config files used to setup the docker development
+# environment and dns lookups
+dnsmasq_docker_conf = <<EOF
+listen-address=127.0.0.1
+listen-address=#{DOCKER_BRIDGE_IP}
+listen-address=#{VM_IP}
+server=/.service.#{CONSUL_DOMAIN}/127.0.0.1##{CONSUL_DNS_PORT}
+EOF
+
+# The systemd dropin config for the docker service
+docker_drop_in_conf = <<EOF
+[Unit]
+Before=dnsmasq.service
+
+[Service]
+ExecStart=
+ExecStart=/usr/bin/docker daemon -H fd:// -H tcp://#{VM_IP}:2375 --bip=#{DOCKER_BRIDGE_CIDR}
+ExecStartPost=/sbin/iptables -P FORWARD ACCEPT
+EOF
+
+# This script is emitted to allow easy reinstantiation of the OSX routes to the
+# consul guests and mounting the NFS share
+mount_nfs_and_routes = <<EOF
+#!/bin/bash
+
+echo '** Adding resolver directory if it does not exist'
+[[ ! -d /etc/resolver ]] && sudo mkdir -p /etc/resolver
+
+echo '** Adding/Replacing *.docker resolver (replacing to ensure OSX sees the change)'
+[[ -f /etc/resolver/#{CONSUL_DOMAIN} ]] && sudo rm -f /etc/resolver/#{CONSUL_DOMAIN}
+sudo bash -c "printf '%s\n%s\n' 'nameserver #{VM_IP}' > /etc/resolver/#{CONSUL_DOMAIN}"
+
+echo '** Adding routes'
+sudo route -n delete #{DOCKER_SUBNET_CIDR} #{VM_IP}
+sudo route -n add #{DOCKER_SUBNET_CIDR} #{VM_IP}
+
+echo '** Mounting ubuntu NFS /home/#{USERNAME}/#{NFS_MOUNT_DIRNAME} to ~/#{NFS_MOUNT_DIRNAME}'
+[[ ! -d #{ENV.fetch('HOME')}/#{NFS_MOUNT_DIRNAME} ]] && mkdir #{ENV.fetch('HOME')}/#{NFS_MOUNT_DIRNAME}
+sudo mount -t nfs -o rw,bg,hard,nolocks,intr,sync #{VM_IP}:/home/#{USERNAME}/#{NFS_MOUNT_DIRNAME} #{ENV.fetch('HOME')}/#{NFS_MOUNT_DIRNAME}
+EOF
+
+File.open("./mount_nfs_share", "w") {|f| f.puts mount_nfs_and_routes }
 
 require 'open3'
-def syscall(log, cmd)
-  print "#{log} ... "
-  status = nil
-  Open3.popen2e(cmd) do |input, output, thr|
-    output.each {|line| puts line }
-    status = thr.value
-  end
-  if status.success?
-    puts "done"
-  else
-    exit(1)
-  end
-end
-
 class SetupDockerRouting < Vagrant.plugin('2')
   name 'setup_docker_routing'
 
@@ -42,29 +139,25 @@ class SetupDockerRouting < Vagrant.plugin('2')
     def call(env)
       @app.call(env)
 
-      syscall("** Setting up routing to .docker domain", <<-EOF
-          echo "** Adding resolver directory if it does not exist"
-          [[ ! -d /etc/resolver ]] && sudo mkdir -p /etc/resolver
-
-          echo "** Adding/Replacing *.docker resolver (replacing to ensure OSX sees the change)"
-          [[ -f /etc/resolver/docker ]] && sudo rm -f /etc/resolver/docker
-          sudo bash -c "printf '%s\n%s\n' 'nameserver #{VM_IP}' 'port #{DOCKER_DNS_PORT}' > /etc/resolver/docker"
-
-          echo "** Adding routes"
-          sudo route -n delete 172.17.0.0/16 #{VM_IP}
-          sudo route -n add 172.17.0.0/16 #{VM_IP}
-          sudo route -n delete 172.17.0.1/32 #{VM_IP}
-          sudo route -n add 172.17.0.1/32 #{VM_IP}
-
-          echo "** Mounting ubuntu NFS /home/#{USERNAME}/vagrant_projects to ~/vagrant_projects"
-          [[ ! -d #{ENV.fetch('HOME')}/vagrant_projects ]] && mkdir #{ENV.fetch('HOME')}/vagrant_projects
-          echo "#!/bin/bash" > ./mount_nfs_share
-          echo "" >> ./mount_nfs_share
-          echo "sudo mount -t nfs -o rw,bg,hard,nolocks,intr,sync #{VM_IP}:/home/#{USERNAME}/vagrant_projects #{ENV.fetch('HOME')}/vagrant_projects" >> ./mount_nfs_share
+      syscall("** Setting up routing to .#{CONSUL_DOMAIN} domain", <<-EOF
           chmod +x ./mount_nfs_share
           ./mount_nfs_share
         EOF
       )
+    end
+
+    def syscall(log, cmd)
+      print "#{log} ... "
+      status = nil
+      Open3.popen2e(cmd) do |input, output, thr|
+        output.each {|line| puts line }
+        status = thr.value
+      end
+      if status.success?
+        puts "done"
+      else
+        exit(1)
+      end
     end
   end
 
@@ -81,37 +174,21 @@ Vagrant.configure("2") do |config|
   # Make sure you have XQuartz running on the host
   config.ssh.forward_x11 = true
 
-  # Create a forwarded port mapping which allows access to a specific port
-  # within the machine from a port on the host machine. In the example below,
-  # accessing "localhost:8080" will access port 80 on the guest machine.
-  # config.vm.network "forwarded_port", guest: 80, host: 8080
-
   # Create a private network, which allows host-only access to the machine
   # using a specific IP.
   config.vm.network "private_network", ip: VM_IP
 
-  # Create a public network, which generally matched to bridged network.
-  # Bridged networks make the machine appear as another physical device on
-  # your network.
-  # config.vm.network "public_network"
-
-  # Share an additional folder to the guest VM. The first argument is
-  # the path on the host to the actual folder. The second argument is
-  # the path on the guest to mount the folder. And the optional third
-  # argument is a set of non-required options.
-  # config.vm.synced_folder "../data", "/vagrant_data"
-  #config.vm.synced_folder ".", "/vagrant", disabled: true
-
   config.vm.provider "virtualbox" do |vb|
-    vb.name = "dev-on-ub"
-    # Customize the amount of memory on the VM:
-    vb.memory = "4096"
-    vb.cpus = 4
-    # Display the VirtualBox GUI when booting the machine
-    # vb.gui = true
-
-    # Set the timesync threshold to 10 seconds, instead of the default 20 minutes.
-    vb.customize ["guestproperty", "set", :id, "/VirtualBox/GuestAdd/VBoxService/--timesync-set-threshold", 10000]
+    vb.name = "#{VM_NAME}"
+    vb.memory = config_options["vm"]["memory"]
+    vb.cpus = config_options["vm"]["cpus"]
+    if ENABLE_GUI
+      vb.gui = ENABLE_GUI
+      vb.customize ["modifyvm", :id, "--vram", config_options["vm"]["vram"]]
+      vb.customize ["modifyvm", :id, "--accelerate3d", config_options["vm"]["accelerate_3d"]]
+      vb.customize ["modifyvm", :id, "--clipboard", config_options["vm"]["clipboard"]]
+      vb.customize ["modifyvm", :id, "--draganddrop", config_options["vm"]["draganddrop"]]
+    end
   end
 
   config.vm.provision "shell", inline: <<-SHELL
@@ -119,43 +196,44 @@ Vagrant.configure("2") do |config|
       LC_CTYPE="en_US.UTF-8" LC_MESSAGES="en_US.UTF-8" \
       LC_MONETARY="en_US.UTF-8" LC_NUMERIC="en_US.UTF-8" LC_TIME="en_US.UTF-8"
 
+    echo "*** Running setup from docker installation"
     apt-get update -y
-    apt-get install -y git vim curl sqlite network-manager dnsmasq nfs-kernel-server debconf-utils
-    apt-get install -y apt-transport-https ca-certificates
+    apt-get install -y --no-install-recommends \
+      apt-transport-https ca-certificates curl software-properties-common
+    curl -fsSL https://apt.dockerproject.org/gpg | sudo apt-key add -
+    add-apt-repository "deb https://apt.dockerproject.org/repo/ ubuntu-$(lsb_release -cs) main"
 
-    echo 'deb https://apt.dockerproject.org/repo ubuntu-xenial main' > /etc/apt/sources.list.d/docker.list
-    apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
-    apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
-    apt-get purge lxc-docker
     apt-get update -y
-    apt-cache policy docker-engine
-    apt-get install -y linux-image-extra-$(uname -r) linux-image-extra-virtual
-    apt-get install -y docker-engine=1.12.6-0~ubuntu-xenial
+    apt-get install -y ntp git vim sqlite debconf-utils \
+      network-manager dnsmasq nfs-kernel-server
+    apt-get install -y docker-engine=#{DOCKER_ENGINE_VERSION}~ubuntu-$(lsb_release -cs)
 
-    curl -L https://github.com/docker/compose/releases/download/1.8.0/docker-compose-`uname -s`-`uname -m` > /usr/local/bin/docker-compose
+    curl -L https://github.com/docker/compose/releases/download/#{DOCKER_COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` > /usr/local/bin/docker-compose
     chmod +x /usr/local/bin/docker-compose
 
-    echo "creating docker group and user"
-    groupadd -f docker
-    usermod -aG docker vagrant
-
     echo 'GRUB_CMDLINE_LINUX="cgroup_enable=memory swapaccount=1"' >> /etc/default/grub
-    service docker start
 
-    echo "** Setting up INSECURE TCP port for docker daemon"
+    echo "** Modifying NetworkManager and dnsmasq to support routing to service.docker"
+    sed -e 's/.*bind-interfaces/# bind-interfaces/' -i /etc/dnsmasq.d/network-manager
+    sed -e 's/.*dns=dnsmasq/# dns=dnsmasq/' -i /etc/NetworkManager/NetworkManager.conf
+    echo "#{dnsmasq_docker_conf}" > /etc/dnsmasq.d/10-docker
+
+    echo "** Setting up systemd drop-in config for docker daemon"
     mkdir /etc/systemd/system/docker.service.d
-    pushd /etc/systemd/system/docker.service.d
+    echo "#{docker_drop_in_conf}" > /etc/systemd/system/docker.service.d/dev-on-docker.conf
 
-    echo "[Service]" > dev-on-docker-tcp.conf
-    echo "ExecStart=" >> dev-on-docker-tcp.conf
-    echo "ExecStart=/usr/bin/docker daemon -H fd:// -H tcp://#{VM_IP}:2375" >> dev-on-docker-tcp.conf
-
-    popd
+    echo "Reloading systemclt configs and restarting services"
     systemctl daemon-reload
+    service ntp restart
+    service nfs-kernel-server restart
+    service network-manager restart
+    service dnsmasq restart
+    service docker restart
 
-    echo "** Adding ubuntu user to admin group"
+    echo "creating admin and docker groups, adding vagrant user"
+    groupadd -f docker
     groupadd -f admin
-    usermod -aG admin vagrant
+    usermod -aG admin,docker vagrant
   SHELL
 
   [
@@ -171,39 +249,31 @@ Vagrant.configure("2") do |config|
   end
 
   config.vm.provision "shell", inline: <<-SHELL
-    apt-get install -y zsh
+    apt-get install -y $(basename #{SHELL})
     adduser --force-badname --uid 9999 --shell=/bin/$(basename #{SHELL}) --disabled-password --gecos "#{USERNAME}" #{USERNAME}
     usermod -G docker,admin,sudo,staff #{USERNAME}
     echo "#{USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/#{USERNAME}
+
+    echo "** Setting up ssh keys and hosts"
     mkdir ~#{USERNAME}/.ssh
     chmod 0700 ~#{USERNAME}/.ssh
     mv /tmp/id_rsa* ~#{USERNAME}/.ssh/
     mv /tmp/ssh_config ~#{USERNAME}/.ssh/config
+    cat ~#{USERNAME}/.ssh/id_rsa.pub >> ~#{USERNAME}/.ssh/authorized_keys
+    chmod 0600 ~#{USERNAME}/.ssh/authorized_keys
+    ssh-keyscan github.com bitbucket.org >> ~#{USERNAME}/.ssh/known_hosts
+
     mv /tmp/extras.sh /tmp/localextras.sh ~#{USERNAME}/
-    mkdir ~#{USERNAME}/vagrant_projects
-    echo "File from dev-on-ub" > ~#{USERNAME}/vagrant_projects/README.txt
+    mkdir ~#{USERNAME}/#{NFS_MOUNT_DIRNAME}
+    echo "File from dev-on-ub" > ~#{USERNAME}/#{NFS_MOUNT_DIRNAME}/README.txt
 
     mkdir ~#{USERNAME}/consul-registrator-setup/
     mv /tmp/consul.json /tmp/docker-compose.yml ~#{USERNAME}/consul-registrator-setup/
 
     chown -R #{USERNAME}: ~#{USERNAME}
 
-    apt-get install -y nfs-kernel-server
-    echo "/home/#{USERNAME}/vagrant_projects #{VM_GATEWAY_IP}(rw,sync,no_subtree_check,insecure,anonuid=$(id -u #{USERNAME}),anongid=$(id -g #{USERNAME}),all_squash)" >> /etc/exports
-    service nfs-kernel-server start
+    echo "/home/#{USERNAME}/#{NFS_MOUNT_DIRNAME} #{VM_GATEWAY_IP}(rw,sync,no_subtree_check,insecure,anonuid=$(id -u #{USERNAME}),anongid=$(id -g #{USERNAME}),all_squash)" >> /etc/exports
     exportfs -a
-
-    echo "** Modifying NetworkManager and dnsmasq to support routing to service.docker"
-    sed -e 's/.*bind-interfaces/# bind-interfaces/' -i /etc/dnsmasq.d/network-manager
-    sed -e 's/.*dns=dnsmasq/# dns=dnsmasq/' -i /etc/NetworkManager/NetworkManager.conf
-
-    echo "listen-address=127.0.0.1" > /etc/dnsmasq.d/10-docker
-    echo "listen-address=172.17.0.1" >> /etc/dnsmasq.d/10-docker
-    echo "listen-address=#{VM_IP}" >> /etc/dnsmasq.d/10-docker
-    echo "server=/.service.docker/127.0.0.1#8600" >> /etc/dnsmasq.d/10-docker
-
-    service network-manager restart
-    service dnsmasq restart
 
     sudo -u #{USERNAME} -i bash extras.sh
 
@@ -216,5 +286,13 @@ Vagrant.configure("2") do |config|
     echo "** Run 'export DOCKER_HOST="tcp://#{VM_IP}:2375"' on this host to interact with docker in the vagrant guest"
     echo "** Note that some things may not work."
   SHELL
+
+  if ENABLE_GUI
+    config.vm.provision "file", source: "./enable_gui.sh", destination: "/tmp/enable_gui.sh"
+    config.vm.provision "shell", inline: <<-SHELL
+      mv /tmp/enable_gui.sh ~#{USERNAME}/
+      sudo -u #{USERNAME} -i bash enable_gui.sh
+    SHELL
+  end
 end
 

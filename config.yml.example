@@ -1,0 +1,24 @@
+
+user:
+  username: 
+  shell: 
+enable_gui: true
+vm:
+  name: "dev-on-graphics"
+  ip: 192.168.90.11
+  gateway_ip: 192.168.90.1
+  cpus: 4
+  memory: 8192
+  vram: 64
+  accelerate_3d: on
+  clipboard: bidirectional
+  draganddrop: hosttoguest
+docker:
+  bridge_ip: 172.20.0.1
+  subnet_ip: 172.20.0.0
+  subnet_mask: 16
+consul:
+  dns_port: 8600
+  domain: graphics
+nfs:
+  directory_name: vagrant_graphics

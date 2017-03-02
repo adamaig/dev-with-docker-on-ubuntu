@@ -1,15 +1,12 @@
 #!/bin/bash
 
 echo "** INSTALLING support software for development"
-sudo apt-get install -y zsh vim tmux fonts-powerline nodejs-legacy ruby \
-  golang-go silversearcher-ag imagemagick xauth xclip \
+sudo apt-get install -y zsh vim tmux fonts-powerline \
+  nodejs-legacy ruby golang-go python-dev python-pip \
+  silversearcher-ag imagemagick xauth xclip \
   mysql-client postgresql-client
 
-echo "** Support for AWS CLIs"
-sudo apt-get install -y python-dev python-pip
 sudo pip install --upgrade pip
-sudo pip install awsebcli
-sudo pip install awscli
 
 sudo fc-cache -vf # to activate the fonts: see http://askubuntu.com/questions/283908/how-can-i-install-and-use-powerline-plugin
 

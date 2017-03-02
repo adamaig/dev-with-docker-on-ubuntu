@@ -6,15 +6,24 @@ VM. This project is a jumping off point.
 
 # Features
 
-- Docker & docker-compose installed and configured
-- Provides a Consul & Registrator setup for DNS communication from host to guest,
-  as well as between containers and projects.
-- Auto-configuration of a limited clone of the user running `vagrant up`. SSH keys
-  are copied to a user created with the same name as the host user.
-- NFS mount from guest(ubuntu):~/vagrant_projects to host:~/vagrant_projects to allow
-  editing from the host while executing all application code in the guest.
-- Extensible by editing localextras.sh to meet needs of cloned user
-- Generates script `mount_nfs_share` to remount drive to host if it is disconnected
+This project provides easily configurable box building with:
+
+- Docker
+  - Docker-daemon tweaks via Systemd configs.
+  - Docker & docker-compose installed and configured
+- Routing
+ - OSX routing and resolver based dns lookups for your docker domains
+ - dnsmasq routing to you docker containers in the guest
+ - Provides a Consul & Registrator setup for DNS communication and discovery.
+- Editing
+  - NFS sharing from the guest to the host to support live editing AND file
+    eventing for build systems (guard, webpack, etc)
+  - Generates script `mount_nfs_share` to remount drive and setup routes to
+    host if it is disconnected
+- User provisioning
+  - Auto-configuration of a limited clone of the user running `vagrant up`. SSH keys
+    are copied to a user created with the same name as the host user.
+  - Extensible by editing localextras.sh to meet needs of cloned user
 
 # Usage
 
@@ -32,7 +41,7 @@ docker and docker-compose in order to run docker commands from the host, but
 not been tested in conjunction with this repo, as this project is an attempt
 to replace the docker-machine.
 
-## Basic setup
+## Basic Setup
 
 - Install vagrant either via download or homebrew.
 - Copy localextras.sh.example to localextras.sh
@@ -43,8 +52,44 @@ to replace the docker-machine.
   commands on the host to setup DNS routing for the .docker domain to the guest.
   See OSX's documenation on /etc/resolver/ files (i.e., `man 5 resolver`).
 
-## Editing
+### Advanced Setup
+
+Many configuration options are available by setting up a ``config.yml`` file.
+This file is processed with ERB before loading, allowing use of ruby scripting
+to configure values.  I found that I wanted to build experimental boxes, but
+needed them to run on different ips, and have different NFS mounts, or use
+different domain names for routing. The options are documented in the Vagrant
+file.
+
+```
+user:
+  username: <%= ENV.fetch('USER') %>
+  shell: '/bin/bash'
+enable_gui: true
+vm:
+  name: "dev-with-gui"
+  ip: 192.168.90.11
+  gateway_ip: 192.168.90.1
+  cpus: 4
+  memory: 8192
+  vram: 64
+  accelerate_3d: on
+  clipboard: bidirectional
+  draganddrop: hosttoguest
+docker:
+  bridge_ip: 172.20.0.1
+  subnet_ip: 172.20.0.0
+  subnet_mask: 16
+consul:
+  dns_port: 8600
+  domain: graphics
+nfs:
+  directory_name: dev_with_gui_projects
+```
+
+## Access & Workflow
 - Connect to the vagrant guest as the user by either
+  1. `ssh 192.168.90.10` if using the default ip setting, *OR*
   1. `vagrant ssh` and then `sudo su -l <username>` in the box, *OR*
   2. `ssh localhost -X -p $(vagrant ssh-config | awk '/Port/ { print $2;}')`
 - Edit files in ~$USER/vagrant_project
