@@ -19,9 +19,9 @@ config_options = {
     "clipboard" => "bidirectional",
     "draganddrop" => "hosttoguest"
   },
-  "docker" => {"bridge_ip" => "172.17.0.1", "subnet_ip" => "172.20.0.0", "subnet_mask" => 16},
+  "docker" => {"bridge_ip" => "172.17.0.1", "subnet_ip" => "172.17.0.0", "subnet_mask" => 16},
   "consul" => {"dns_port" => 8600, "domain" => "docker"},
-  "nfs" => {"directory_name" => "vagrant_projects"}
+  "nfs" => {"mount_on_up" => true, "directory_name" => "vagrant_projects"}
 }
 class Hash
   def options_merge(other)
@@ -29,7 +29,7 @@ class Hash
       if self_v.is_a?(Hash)
         self_v.options_merge(other_v)
       else
-        other_v ? other_v : self_v
+        other_v.nil? ? self_v : other_v
       end
     end
   end
@@ -76,6 +76,8 @@ CONSUL_DNS_PORT = config_options["consul"]["dns_port"]
 # Used by dnsmasq for to route dns queries to consul
 CONSUL_DOMAIN = config_options["consul"]["domain"]
 
+# Mounts NFS share after machine is up if true
+NFS_MOUNT_ON_UP = config_options["nfs"]["mount_on_up"]
 # Name of the directory used for the NFS mount
 NFS_MOUNT_DIRNAME = config_options["nfs"]["directory_name"]
 
@@ -105,8 +107,8 @@ ExecStartPost=/sbin/iptables -P FORWARD ACCEPT
 EOF
 
 # This script is emitted to allow easy reinstantiation of the OSX routes to the
-# consul guests and mounting the NFS share
-mount_nfs_and_routes = <<EOF
+# consul guests
+osx_routes = <<EOF
 #!/bin/bash
 
 echo '** Adding resolver directory if it does not exist'
@@ -119,13 +121,23 @@ sudo bash -c "printf '%s\n%s\n' 'nameserver #{VM_IP}' > /etc/resolver/#{CONSUL_D
 echo '** Adding routes'
 sudo route -n delete #{DOCKER_SUBNET_CIDR} #{VM_IP}
 sudo route -n add #{DOCKER_SUBNET_CIDR} #{VM_IP}
+EOF
+
+# This script is emitted to allow mounting the NFS share
+mount_nfs = <<EOF
+#!/bin/bash
 
 echo '** Mounting ubuntu NFS /home/#{USERNAME}/#{NFS_MOUNT_DIRNAME} to ~/#{NFS_MOUNT_DIRNAME}'
-[[ ! -d #{ENV.fetch('HOME')}/#{NFS_MOUNT_DIRNAME} ]] && mkdir #{ENV.fetch('HOME')}/#{NFS_MOUNT_DIRNAME}
+[[ ! -d #{ENV.fetch('HOME')}/#{NFS_MOUNT_DIRNAME} ]] && mkdir #{ENV.fetch('HOME')}/#{NFS_MOUNT_DIRNAME} && touch #{ENV.fetch('HOME')}/#{NFS_MOUNT_DIRNAME}/.metadata_never_index
 sudo mount -t nfs -o rw,bg,hard,nolocks,intr,sync #{VM_IP}:/home/#{USERNAME}/#{NFS_MOUNT_DIRNAME} #{ENV.fetch('HOME')}/#{NFS_MOUNT_DIRNAME}
 EOF
 
-File.open("./mount_nfs_share", "w") {|f| f.puts mount_nfs_and_routes }
+unless File.exist?("./setup_routes")
+  File.open("./setup_routes", "w", 0700) {|f| f.puts osx_routes }
+end
+unless File.exist?("./mount_nfs_share")
+  File.open("./mount_nfs_share", "w", 0700) {|f| f.puts mount_nfs }
+end
 
 require 'open3'
 class SetupDockerRouting < Vagrant.plugin('2')
@@ -139,9 +151,14 @@ class SetupDockerRouting < Vagrant.plugin('2')
     def call(env)
       @app.call(env)
 
+      if NFS_MOUNT_ON_UP
+        syscall("** Mouting NFS share", <<-EOF
+            ./mount_nfs_share
+          EOF
+        )
+      end
       syscall("** Setting up routing to .#{CONSUL_DOMAIN} domain", <<-EOF
-          chmod +x ./mount_nfs_share
-          ./mount_nfs_share
+          ./setup_routes
         EOF
       )
     end

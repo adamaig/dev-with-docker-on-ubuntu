@@ -21,4 +21,5 @@ consul:
   dns_port: 8600
   domain: graphics
 nfs:
+  mount_on_up: true
   directory_name: vagrant_graphics
