@@ -63,33 +63,34 @@ file.
 
 ```
 user:
-  username: <%= ENV.fetch('USER') %>
-  shell: '/bin/bash'
-enable_gui: true
+  username:                            # Sets the user to create
+  shell:                               # Sets the login shell of the user
+enable_gui: true                       # Enable/disable the gui: true, false
 vm:
-  name: "dev-with-gui"
-  ip: 192.168.90.11
-  gateway_ip: 192.168.90.1
-  cpus: 4
-  memory: 8192
-  vram: 64
-  accelerate_3d: on
-  clipboard: bidirectional
-  draganddrop: hosttoguest
+  name: "dev-on-graphics"              # Sets the name of the vagrant guest
+  ip: 192.168.90.10                    # Sets the private ip of the guest. Used for routing
+  gateway_ip: 192.168.90.1             # Sets the gateway for the guest. Used for NFS mount sharing
+  cpus: 4                              # Passed to `VBoxManage modifyvm` to configure guest resources
+  memory: 8192                         # ditto
+  vram: 64                             # ditto
+  accelerate_3d: on                    # ditto
+  clipboard: bidirectional             # ditto
+  draganddrop: hosttoguest             # ditto
 docker:
-  bridge_ip: 172.20.0.1
-  subnet_ip: 172.20.0.0
-  subnet_mask: 16
+  bridge_ip: 172.17.0.1                # Sets docker daemon brige ip
+  subnet_ip: 172.17.0.0                # Sets docker daemon subnet ip. Used for DNS routing
+  subnet_mask: 16                      # Sets docker daemon subnet mask. Used for DNS routing
 consul:
-  dns_port: 8600
-  domain: graphics
+  dns_port: 8600                       # Sets the DNS port for consul in dnsmasq and resolver configs
+  domain: graphics                     # ditto
 nfs:
-  directory_name: dev_with_gui_projects
+  mount_on_up: true                    # Enable/disable mounting NFS share on guest up: true, false
+  directory_name: vagrant_graphics     # Specifies name of directory for mount and share
 ```
 
 ## Access & Workflow
 - Connect to the vagrant guest as the user by either
-  1. `ssh 192.168.90.10` if using the default ip setting, *OR*
+  1. `ssh 192.168.90.10` if using the default ip setting (use config.yml's vm.ip otherwise), *OR*
   1. `vagrant ssh` and then `sudo su -l <username>` in the box, *OR*
   2. `ssh localhost -X -p $(vagrant ssh-config | awk '/Port/ { print $2;}')`
 - Edit files in ~$USER/vagrant_project
@@ -114,7 +115,7 @@ similar the one shown in `examples/webapp/docker-compose.yml`
 
 ### Use DOCKER_HOST env var to communicate from host to guest daemon
 
-After provisioning the machine, run `export DOCKER_HOST="tcp://192.168.90.10:2375"`
+After provisioning the machine, run `export DOCKER_HOST="tcp://[guest ip]:2375"`
 in order to allow local docker tools to communicate to the docker daemon on
 the guest.
 
@@ -158,6 +159,7 @@ VBoxManage storageattach udev --storagectl SATA --port 0 --device 0 \
 ```
 
 # Clipboard Support
+
 For Mac, in order to use the clipboard across the host and the guest vagrant box, you must:
 
 1. Download and run [XQuartz](https://www.xquartz.org/)
@@ -168,12 +170,14 @@ For Mac, in order to use the clipboard across the host and the guest vagrant box
       ...
       ForwardX11 yes
   ```
-  or pass the `-X` flag to the ssh connection string
+  or pass the ``-X`` flag to the ssh connection string
 
-  ```ssh user@host -X```
+  ``ssh user@host -X``
 
 ## Add Support for `pbcopy` and `pbpaste`
+
 If you prefer to use `pbcopy` and `pbpaste` within the vagrant box just add the following to your shell config.
+
 ```shell
 # .zshrc or .bashrc
 alias pbcopy='xclip -selection clipboard'
@@ -187,3 +191,12 @@ alias pbpaste='xclip -selection clipboard -o'
 if-shell "uname -n | grep vagrant" \
   'bind-key -t vi-copy Enter copy-pipe "xclip -in -selection clipboard"'
 ```
+
+# Known Issues
+
+1. Be careful when halting the guest if you have the NFS share mounted, particularly
+if you use Alfred, as halting the box or other network disruptions may cause the
+Finder or other filesystem interaction to freeze while waiting on the mount to
+timeout. **If this occurs, a) unmount the share, and if that fails b) restart the
+guest, and unmount the share before halting.** Don't panic!
+

@@ -1,25 +1,25 @@
 
 user:
-  username: 
-  shell: 
-enable_gui: true
+  username:                            # Sets the user to create
+  shell:                               # Sets the login shell of the user
+enable_gui: true                       # Enable/disable the gui: true, false
 vm:
-  name: "dev-on-graphics"
-  ip: 192.168.90.11
-  gateway_ip: 192.168.90.1
-  cpus: 4
-  memory: 8192
-  vram: 64
-  accelerate_3d: on
-  clipboard: bidirectional
-  draganddrop: hosttoguest
+  name: "dev-on-graphics"              # Sets the name of the vagrant guest
+  ip: 192.168.90.11                    # Sets the private ip of the guest. Used for routing
+  gateway_ip: 192.168.90.1             # Sets the gateway for the guest. Used for NFS mount sharing
+  cpus: 4                              # Passed to `VBoxManage modifyvm` to configure guest resources
+  memory: 8192                         # ditto
+  vram: 64                             # ditto
+  accelerate_3d: on                    # ditto
+  clipboard: bidirectional             # ditto
+  draganddrop: hosttoguest             # ditto
 docker:
-  bridge_ip: 172.20.0.1
-  subnet_ip: 172.20.0.0
-  subnet_mask: 16
+  bridge_ip: 172.20.0.1                # Sets docker daemon brige ip
+  subnet_ip: 172.20.0.0                # Sets docker daemon subnet ip. Used for DNS routing
+  subnet_mask: 16                      # Sets docker daemon subnet mask. Used for DNS routing
 consul:
-  dns_port: 8600
-  domain: graphics
+  dns_port: 8600                       # Sets the DNS port for consul in dnsmasq and resolver configs
+  domain: graphics                     # ditto
 nfs:
-  mount_on_up: true
-  directory_name: vagrant_graphics
+  mount_on_up: true                    # Enable/disable mounting NFS share on guest up: true, false
+  directory_name: vagrant_graphics     # Specifies name of directory for mount and share
