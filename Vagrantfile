@@ -208,7 +208,7 @@ Vagrant.configure("2") do |config|
     end
   end
 
-  config.vm.provision "shell", inline: <<-SHELL
+  config.vm.provision "shell", name: "base_setup", inline: <<-SHELL
     update-locale LANG="en_US.UTF-8" LC_COLLATE="en_US.UTF-8" \
       LC_CTYPE="en_US.UTF-8" LC_MESSAGES="en_US.UTF-8" \
       LC_MONETARY="en_US.UTF-8" LC_NUMERIC="en_US.UTF-8" LC_TIME="en_US.UTF-8"
@@ -225,9 +225,12 @@ Vagrant.configure("2") do |config|
       network-manager dnsmasq nfs-kernel-server
     apt-get install -y docker-engine=#{DOCKER_ENGINE_VERSION}~ubuntu-$(lsb_release -cs)
 
-    curl -L https://github.com/docker/compose/releases/download/#{DOCKER_COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` > /usr/local/bin/docker-compose
-    chmod +x /usr/local/bin/docker-compose
+    if [ ! -f /usr/local/bin/docker-compose ] && [ `docker-compose --version` =~ "#{DOCKER_COMPOSE_VERSION}" ] ; then
+      curl -L https://github.com/docker/compose/releases/download/#{DOCKER_COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` > /usr/local/bin/docker-compose
+      chmod +x /usr/local/bin/docker-compose
+    fi
 
+    sed -i "/^GRUB_CMDLINE_LINUX/d" /etc/default/grub
     echo 'GRUB_CMDLINE_LINUX="cgroup_enable=memory swapaccount=1"' >> /etc/default/grub
 
     echo "** Modifying NetworkManager and dnsmasq to support routing to service.docker"
@@ -236,7 +239,7 @@ Vagrant.configure("2") do |config|
     echo "#{dnsmasq_docker_conf}" > /etc/dnsmasq.d/10-docker
 
     echo "** Setting up systemd drop-in config for docker daemon"
-    mkdir /etc/systemd/system/docker.service.d
+    [ ! -d /etc/systemd/system/docker.service.d ] && mkdir /etc/systemd/system/docker.service.d
     echo "#{docker_drop_in_conf}" > /etc/systemd/system/docker.service.d/dev-on-docker.conf
 
     echo "Reloading systemclt configs and restarting services"
@@ -265,48 +268,59 @@ Vagrant.configure("2") do |config|
     config.vm.provision "file", source: x[:s], destination: x[:d]
   end
 
-  config.vm.provision "shell", inline: <<-SHELL
+  # User creation scripts
+  config.vm.provision "shell", name: "create_user", inline: <<-SHELL
     apt-get install -y $(basename #{SHELL})
-    adduser --force-badname --uid 9999 --shell=/bin/$(basename #{SHELL}) --disabled-password --gecos "#{USERNAME}" #{USERNAME}
+    [[ -z "$(getent passwd #{USERNAME})" ]] && adduser --force-badname --uid 9999 --shell=/bin/$(basename #{SHELL}) --disabled-password --gecos "#{USERNAME}" #{USERNAME}
     usermod -G docker,admin,sudo,staff #{USERNAME}
     echo "#{USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/#{USERNAME}
 
     echo "** Setting up ssh keys and hosts"
-    mkdir ~#{USERNAME}/.ssh
+    [[ ! -d ~#{USERNAME}/.ssh ]] && mkdir ~#{USERNAME}/.ssh
     chmod 0700 ~#{USERNAME}/.ssh
     mv /tmp/id_rsa* ~#{USERNAME}/.ssh/
     mv /tmp/ssh_config ~#{USERNAME}/.ssh/config
+
+    echo "** Cleaning up ssh authorized_keys and known_hosts"
+    cat ~#{USERNAME}/.ssh/id_rsa.pub | xargs -I{} echo '^{}$' | xargs -I{} grep -v -e '{}' ~#{USERNAME}/.ssh/authorized_keys > ~#{USERNAME}/.ssh/cleaned_authorized_keys
+    mv ~#{USERNAME}/.ssh/cleaned_authorized_keys ~#{USERNAME}/.ssh/authorized_keys
     cat ~#{USERNAME}/.ssh/id_rsa.pub >> ~#{USERNAME}/.ssh/authorized_keys
     chmod 0600 ~#{USERNAME}/.ssh/authorized_keys
     ssh-keyscan github.com bitbucket.org >> ~#{USERNAME}/.ssh/known_hosts
+    sudo -u #{USERNAME} -i ssh-keygen -R github.com
+    sudo -u #{USERNAME} -i ssh-keygen -R bitbucket.org
 
     mv /tmp/extras.sh /tmp/localextras.sh ~#{USERNAME}/
-    mkdir ~#{USERNAME}/#{NFS_MOUNT_DIRNAME}
-    echo "File from dev-on-ub" > ~#{USERNAME}/#{NFS_MOUNT_DIRNAME}/README.txt
+    [[ ! -d ~#{USERNAME}/#{NFS_MOUNT_DIRNAME} ]] && mkdir ~#{USERNAME}/#{NFS_MOUNT_DIRNAME}
+    echo "File from #{VM_NAME}" > ~#{USERNAME}/#{NFS_MOUNT_DIRNAME}/README.txt
 
-    mkdir ~#{USERNAME}/consul-registrator-setup/
+    [[ ! -d ~#{USERNAME}/consul-registrator-setup ]] && mkdir ~#{USERNAME}/consul-registrator-setup/
     mv /tmp/consul.json /tmp/docker-compose.yml ~#{USERNAME}/consul-registrator-setup/
+    sed -i -e 's/docker\./#{CONSUL_DOMAIN}./' ~#{USERNAME}/consul-registrator-setup/consul.json
 
     chown -R #{USERNAME}: ~#{USERNAME}
 
+    sed -i "/^\\/home\\/#{USERNAME}\\/#{NFS_MOUNT_DIRNAME} /d" /etc/exports
     echo "/home/#{USERNAME}/#{NFS_MOUNT_DIRNAME} #{VM_GATEWAY_IP}(rw,sync,no_subtree_check,insecure,anonuid=$(id -u #{USERNAME}),anongid=$(id -g #{USERNAME}),all_squash)" >> /etc/exports
     exportfs -a
 
     sudo -u #{USERNAME} -i bash extras.sh
+  SHELL
 
+  # Cleanup scripts
+  config.vm.provision "shell", name: "cleanup", inline: <<-SHELL
     echo "** Cleaning up old packaged with 'apt autoremove' ... "
-    apt autoremove -y
+    apt-get autoremove -y
 
-    echo "** Linking /Users -> /home in the guest. Supports volume mounting in docker-compose"
+    echo "** Linking /Users -> /home in the guest. Supports volume mounting in docker-compose path expansion over the DOCKER_HOST tcp connection."
     [[ ! -L /Users ]] && ln -s /home /Users
 
     echo "** Run 'export DOCKER_HOST="tcp://#{VM_IP}:2375"' on this host to interact with docker in the vagrant guest"
-    echo "** Note that some things may not work."
   SHELL
 
   if ENABLE_GUI
     config.vm.provision "file", source: "./enable_gui.sh", destination: "/tmp/enable_gui.sh"
-    config.vm.provision "shell", inline: <<-SHELL
+    config.vm.provision "shell", name: "enable_gui", inline: <<-SHELL
       mv /tmp/enable_gui.sh ~#{USERNAME}/
       sudo -u #{USERNAME} -i bash enable_gui.sh
     SHELL

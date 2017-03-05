@@ -144,17 +144,17 @@ The fundamental model is based around these assumptions:
 
 # Resizing VBox disks
 
-The VMDK format cannot be resized current (2016-09-05), but it is possible to
+The VMDK format cannot be resized currently (2017-03-05), but it is possible to
 clone the drive to the VDI format, and increase the max size of the disk. The
 VM must be off in order for this process to execute.
 
 ```shell
 # clone the drive to a new format
-VBoxManage clonehd disk /path/to/current.mdk /path/to/clone.vdi --format vdi
+VBoxManage clonemedium disk /path/to/current.vmdk /path/to/clone.vdi --format vdi
 # Resize it to desired size (e.g., 60GB here)
-VBoxManage modifyhd /path/to/clone.vdi --resize $(expr 6 \* 10240)
+VBoxManage modifymedium /path/to/clone.vdi --resize $(expr 6 \* 10240)
 # Replace the original drive
-VBoxManage storageattach udev --storagectl SATA --port 0 --device 0 \
+VBoxManage storageattach [vm name] --storagectl SATA --port 0 --device 0 \
   --type hdd --medium /path/to/clone.vdi
 ```
 
