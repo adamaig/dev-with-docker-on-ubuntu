@@ -286,9 +286,9 @@ Vagrant.configure("2") do |config|
     mv ~#{USERNAME}/.ssh/cleaned_authorized_keys ~#{USERNAME}/.ssh/authorized_keys
     cat ~#{USERNAME}/.ssh/id_rsa.pub >> ~#{USERNAME}/.ssh/authorized_keys
     chmod 0600 ~#{USERNAME}/.ssh/authorized_keys
-    ssh-keyscan github.com bitbucket.org >> ~#{USERNAME}/.ssh/known_hosts
     sudo -u #{USERNAME} -i ssh-keygen -R github.com
     sudo -u #{USERNAME} -i ssh-keygen -R bitbucket.org
+    ssh-keyscan -H github.com bitbucket.org >> ~#{USERNAME}/.ssh/known_hosts
 
     mv /tmp/extras.sh /tmp/localextras.sh ~#{USERNAME}/
     [[ ! -d ~#{USERNAME}/#{NFS_MOUNT_DIRNAME} ]] && mkdir ~#{USERNAME}/#{NFS_MOUNT_DIRNAME}
