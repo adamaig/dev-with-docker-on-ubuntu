@@ -225,8 +225,8 @@ Vagrant.configure("2") do |config|
       network-manager dnsmasq nfs-kernel-server
     apt-get install -y docker-engine=#{DOCKER_ENGINE_VERSION}~ubuntu-$(lsb_release -cs)
 
-    if [ ! -f /usr/local/bin/docker-compose ] && [ `docker-compose --version` =~ "#{DOCKER_COMPOSE_VERSION}" ] ; then
-      curl -L https://github.com/docker/compose/releases/download/#{DOCKER_COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` > /usr/local/bin/docker-compose
+    if [ ! -f /usr/local/bin/docker-compose ] || [ ! `docker-compose --version` =~ "#{DOCKER_COMPOSE_VERSION}" ] ; then
+      curl -L https://github.com/docker/compose/releases/download/#{DOCKER_COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m) -o /usr/local/bin/docker-compose
       chmod +x /usr/local/bin/docker-compose
     fi
 
