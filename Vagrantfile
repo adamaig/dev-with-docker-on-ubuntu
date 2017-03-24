@@ -19,6 +19,7 @@ config_options = {
     "clipboard" => "bidirectional",
     "draganddrop" => "hosttoguest"
   },
+  "tz" => "UTC",
   "docker" => {"bridge_ip" => "172.17.0.1", "subnet_ip" => "172.17.0.0", "subnet_mask" => 16},
   "consul" => {"dns_port" => 8600, "domain" => "docker"},
   "nfs" => {"mount_on_up" => true, "directory_name" => "vagrant_projects"}
@@ -85,6 +86,9 @@ NFS_MOUNT_DIRNAME = config_options["nfs"]["directory_name"]
 # should match the user running the vagrant box
 USERNAME = config_options["user"]["username"]
 SHELL = config_options["user"]["shell"]
+
+# The timezone for the box
+TIMEZONE = config_options["tz"]
 
 # These HEREDOCs are additional config files used to setup the docker development
 # environment and dns lookups
@@ -241,6 +245,9 @@ Vagrant.configure("2") do |config|
     echo "** Setting up systemd drop-in config for docker daemon"
     [ ! -d /etc/systemd/system/docker.service.d ] && mkdir /etc/systemd/system/docker.service.d
     echo "#{docker_drop_in_conf}" > /etc/systemd/system/docker.service.d/dev-on-docker.conf
+
+    echo "** Configuring timezone"
+    timedatectl set-timezone #{TIMEZONE}
 
     echo "Reloading systemclt configs and restarting services"
     systemctl daemon-reload
