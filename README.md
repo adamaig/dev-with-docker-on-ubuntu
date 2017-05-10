@@ -149,42 +149,77 @@ The VMDK format cannot be resized currently (2017-03-05), but it is possible to
 clone the drive to the VDI format, and increase the max size of the disk. The
 VM must be off in order for this process to execute.
 
-```shell
-# Halt the system if it is running
-vagrant halt
-# clone the drive to a new format:
-VBoxManage clonemedium disk ~/VirtualBox\ VMs/dev-on-ub/ubuntu-16.04-amd64-disk1.vmdk ~/VirtualBox\ VMs/dev-on-ub/ubuntu-16.04-amd64-disk1.vdi --format vdi
-# Resize it to desired size (e.g., 60GB here):
-VBoxManage modifymedium ~/VirtualBox\ VMs/dev-on-ub/ubuntu-16.04-amd64-disk1.vdi --resize $(expr 6 \* 10240)
-# Replace the original drive:
-VBoxManage storageattach dev-on-ub --storagectl "SATA Controller" --port 0 --device 0 --type hdd  --medium ~/VirtualBox\ VMs/dev-on-ub/ubuntu-16.04-amd64-disk.vdi
-```
+In this example a new 60GB disk will be created.
 
-After running this it may be necessary to reboot the box again, and you must
-modify the partition table. Here are the steps to do this:
-- Download the gparted live cd: `wget http://downloads.sourceforge.net/gparted/gparted-live-0.28.1-1-amd64.iso`
-- Attach optical drive w/ cd: `VBoxManage storageattach dev-on-ub --storagectl "SATA Controller" --port 1 --device 0 --type dvddrive --medium ./gparted-live-0.28.1-1-amd64.iso`
-- Configure the boot order: `VBoxManage modifyvm dev-on-ub --boot1 dvd --boot2 disk`
+1. Stop the vagrant guest, clone the existing disk to a new format, resize the
+   disk, and then swap the VM's disk in place.
 
-Now everything is ready to boot. Follow the prompts in GParted until a GUI appears.
-Choose not to modify the keymap, then select a language you want, then continue
-through the remaining prompts. If GParted does not start automatically, start it.
+  ```shell
+  # Halt the system if it is running
+  vagrant halt
 
-You will need to "deactivate" the existing partitions (right click to open menu),
-this will remove the locks, then right click the partition you want to resize
-and modify the partition size as desired. Apply the changes.
+  # clone the drive to a new format:
+  VBoxManage clonemedium disk \
+    ~/VirtualBox\ VMs/dev-on-ub/ubuntu-16.04-amd64-disk1.vmdk \
+    ~/VirtualBox\ VMs/dev-on-ub/ubuntu-16.04-amd64-disk1.vdi --format vdi
 
-Close GParted, then open the terminal and running hte following commands.
-```shell
-sudo pvresize /dev/sda5
-sudo lvresize -l +100%FREE /dev/mapper/ubuntu–vg-root
-sudo e2fsck -f /dev/mapper/ubuntu–vg-root
-sudo resize2fs /dev/mapper/ubuntu–vg-root
-```
+  # Resize it to desired size (e.g., 60GB here):
+  VBoxManage modifymedium ~/VirtualBox\ VMs/dev-on-ub/ubuntu-16.04-amd64-disk1.vdi \
+    --resize $(expr 60 \* 1024)
 
-Shutdown the machine.
+  # Replace the original drive:
+  VBoxManage storageattach dev-on-ub --storagectl "SATA Controller" --port 0 \
+    --device 0 --type hdd  --medium ~/VirtualBox\ VMs/dev-on-ub/ubuntu-16.04-amd64-disk.vdi
+  ```
 
-- Detach optical drive: `VBoxManage storageattach dev-on-ub --storagectl "SATA Controller" --port 1 --device 0 --type dvddrive --forceunmount --medium emptydrive`
+- After running this it may be necessary to restart the box a few times in
+  order to get the VM to fully boot up cleanly. It isn't clean but, I found that
+  "powercycling" it when it got stuck or issuing a `vagrant halt` command would
+  lead to a clean boot after the VM gets stuck.
+
+  Once you have a clean boot up with the new disk attached, and you can proceed
+  to modify the partition table so that the new disk space can be used.
+
+- Download the gparted live cd. The version specified is current as of 2017-05,
+  and the correct variant of the live CD for a 64bit MacBook Pro.
+  ```shell
+  wget http://downloads.sourceforge.net/gparted/gparted-live-0.28.1-1-amd64.iso
+  ```
+
+- Attach optical drive w/ cd:
+  ```shell
+  VBoxManage storageattach dev-on-ub --storagectl "SATA Controller" --port 1 \
+    --device 0 --type dvddrive --medium ./gparted-live-0.28.1-1-amd64.iso
+  ```
+
+- Configure the boot order (1: optical drive; 2: disk):
+  ```shell
+  VBoxManage modifyvm dev-on-ub --boot1 dvd --boot2 disk
+  ```
+
+- Now everything is ready to boot. Follow the prompts in GParted until a GUI appears.
+  Choose not to modify the keymap, then select a language you want, then continue
+  through the remaining prompts. If GParted does not start automatically, start it.
+
+  You will need to "deactivate" the existing partitions (right click to open menu),
+  this will remove the locks, then right click the partition you want to resize
+  and modify the partition size as desired. Apply the changes.
+
+- Close GParted, then open the terminal and running the following commands.
+
+  ```shell
+  sudo pvresize /dev/sda5
+  sudo lvresize -l +100%FREE /dev/mapper/ubuntu–vg-root
+  sudo e2fsck -f /dev/mapper/ubuntu–vg-root
+  sudo resize2fs /dev/mapper/ubuntu–vg-root
+  ```
+
+- Shutdown the machine.
+- Detach optical drive:
+
+  ```shell
+  VBoxManage storageattach dev-on-ub --storagectl "SATA Controller" --port 1 --device 0 --type dvddrive --forceunmount --medium emptydrive
+  ```
 
 Reboot the virtualbox. It may require a few reboots and/or powercycles to get
 the network to reset fully.
