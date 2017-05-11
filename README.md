@@ -201,13 +201,21 @@ In this example a new 60GB disk will be created.
    Note that the disk will be ejected after rebooting. Repeat this step if
    needed.
 
-6. Now everything is ready to boot. Follow the prompts in GParted until a GUI appears.
+6. Now everything is ready to boot.
+   ```shell
+   VBoxManage startvm dev-on-ub --type gui
+   ```
+
+7. Follow the prompts in GParted until a GUI appears.
    Choose not to modify the keymap, then select a language you want, then continue
    through the remaining prompts. If GParted does not start automatically, start it.
 
    You will need to "deactivate" the existing partitions (right click to open menu),
    this will remove the locks, then right click the partition you want to resize
    and modify the partition size as desired. Apply the changes.
+
+   Note the partition device and mount point for the next step. In this example,
+   these are /dev/sda5 and vagrant--vg-root.
 
 7. Close the GParted application, then open the terminal (do not reboot) and
    run the following commands. Note the double dash in 'vagrant--vg-root'.
