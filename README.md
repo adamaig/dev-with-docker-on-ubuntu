@@ -151,8 +151,15 @@ VM must be off in order for this process to execute.
 
 In this example a new 60GB disk will be created.
 
-1. Stop the vagrant guest, clone the existing disk to a new format, resize the
-   disk, and then swap the VM's disk in place.
+1. Start downloading the gparted live cd. The version specified is current as of 2017-05,
+   and the correct variant of the live CD for a 64bit MacBook Pro.
+   ```shell
+   wget http://downloads.sourceforge.net/gparted/gparted-live-0.28.1-1-amd64.iso
+   ```
+
+2. If the download is continuing, open a new terminal. Stop the vagrant guest,
+   clone the existing disk to a new format, resize the disk, and then swap the
+   VM's disk in place.
 
    ```shell
    # Halt the system if it is running
@@ -172,7 +179,12 @@ In this example a new 60GB disk will be created.
      --device 0 --type hdd  --medium ~/VirtualBox\ VMs/dev-on-ub/ubuntu-16.04-amd64-disk.vdi
    ```
 
-2. After running this it may be necessary to restart the box a few times in
+3. Configure the boot order (1: optical drive; 2: disk):
+   ```shell
+   VBoxManage modifyvm dev-on-ub --boot1 dvd --boot2 disk
+   ```
+
+4. After running this it may be necessary to restart the box a few times in
    order to get the VM to fully boot up cleanly. It isn't clean but, I found that
    "powercycling" it when it got stuck or issuing a `vagrant halt` command would
    lead to a clean boot after the VM gets stuck.
@@ -180,22 +192,14 @@ In this example a new 60GB disk will be created.
    Once you have a clean boot up with the new disk attached, and you can proceed
    to modify the partition table so that the new disk space can be used.
 
-3. Download the gparted live cd. The version specified is current as of 2017-05,
-   and the correct variant of the live CD for a 64bit MacBook Pro.
-   ```shell
-   wget http://downloads.sourceforge.net/gparted/gparted-live-0.28.1-1-amd64.iso
-   ```
-
-4. Attach optical drive w/ cd:
+5. Attach optical drive w/ cd:
    ```shell
    VBoxManage storageattach dev-on-ub --storagectl "SATA Controller" --port 1 \
      --device 0 --type dvddrive --medium ./gparted-live-0.28.1-1-amd64.iso
    ```
 
-5. Configure the boot order (1: optical drive; 2: disk):
-   ```shell
-   VBoxManage modifyvm dev-on-ub --boot1 dvd --boot2 disk
-   ```
+   Note that the disk will be ejected after rebooting. Repeat this step if
+   needed.
 
 6. Now everything is ready to boot. Follow the prompts in GParted until a GUI appears.
    Choose not to modify the keymap, then select a language you want, then continue
@@ -205,17 +209,18 @@ In this example a new 60GB disk will be created.
    this will remove the locks, then right click the partition you want to resize
    and modify the partition size as desired. Apply the changes.
 
-7. Close GParted, then open the terminal and running the following commands.
+7. Close the GParted application, then open the terminal (do not reboot) and
+   run the following commands. Note the double dash in 'vagrant--vg-root'.
 
    ```shell
    sudo pvresize /dev/sda5
-   sudo lvresize -l +100%FREE /dev/mapper/ubuntu–vg-root
-   sudo e2fsck -f /dev/mapper/ubuntu–vg-root
-   sudo resize2fs /dev/mapper/ubuntu–vg-root
+   sudo lvresize -l +100%FREE /dev/mapper/vagrant-–vg-root
+   sudo e2fsck -f /dev/mapper/vagrant-–vg-root
+   sudo resize2fs /dev/mapper/vagrant-–vg-root
    ```
 
 8. Shutdown the machine.
-9. Detach optical drive:
+9. If the disk isn't automatically ejected, Eject the ISO in the optical drive:
 
    ```shell
    VBoxManage storageattach dev-on-ub --storagectl "SATA Controller" --port 1 \
