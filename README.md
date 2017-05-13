@@ -155,6 +155,8 @@ In this example a new 60GB disk will be created.
    and the correct variant of the live CD for a 64bit MacBook Pro.
    ```shell
    wget http://downloads.sourceforge.net/gparted/gparted-live-0.28.1-1-amd64.iso
+   # OR
+   curl -L -O http://downloads.sourceforge.net/gparted/gparted-live-0.28.1-1-amd64.iso
    ```
 
 2. If the download is continuing, open a new terminal. Stop the vagrant guest,
@@ -210,12 +212,17 @@ In this example a new 60GB disk will be created.
    Choose not to modify the keymap, then select a language you want, then continue
    through the remaining prompts. If GParted does not start automatically, start it.
 
+   Note the partition device and mount point for the next step. In this example,
+   these are /dev/sda5 and vagrant--vg-root.
+
    You will need to "deactivate" the existing partitions (right click to open menu),
    this will remove the locks, then right click the partition you want to resize
    and modify the partition size as desired. Apply the changes.
 
-   Note the partition device and mount point for the next step. In this example,
-   these are /dev/sda5 and vagrant--vg-root.
+   This process must be done twice. Once to resize the extended partition so
+   that it can use all the space on the physical disk, and again to resize the
+   child of the extended partition, /dev/sda5, so that it can use all the space
+   in the parent partition.
 
 7. Close the GParted application, then open the terminal (do not reboot) and
    run the following commands. Note the double dash in 'vagrant--vg-root'.
