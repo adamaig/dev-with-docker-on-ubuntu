@@ -22,7 +22,11 @@ config_options = {
   "tz" => "UTC",
   "docker" => {"bridge_ip" => "172.17.0.1", "subnet_ip" => "172.17.0.0", "subnet_mask" => 16},
   "consul" => {"dns_port" => 8600, "domain" => "docker"},
-  "nfs" => {"mount_on_up" => true, "directory_name" => "vagrant_projects"}
+  "nfs" => {
+    "mount_on_up" => true,
+    "directory_name" => "vagrant_projects",
+    "host_mount_options" => "rw,bg,hard,nolocks,intr,sync"
+  }
 }
 class Hash
   def options_merge(other)
@@ -81,6 +85,8 @@ CONSUL_DOMAIN = config_options["consul"]["domain"]
 NFS_MOUNT_ON_UP = config_options["nfs"]["mount_on_up"]
 # Name of the directory used for the NFS mount
 NFS_MOUNT_DIRNAME = config_options["nfs"]["directory_name"]
+# NFS client/host mount options
+NFS_HOST_MOUNT_OPTS = config_options["nfs"]["host_mount_options"]
 
 # This var will be used to configure the user created in the vagrant, and
 # should match the user running the vagrant box
@@ -133,15 +139,13 @@ mount_nfs = <<EOF
 
 echo '** Mounting ubuntu NFS /home/#{USERNAME}/#{NFS_MOUNT_DIRNAME} to ~/#{NFS_MOUNT_DIRNAME}'
 [[ ! -d #{ENV.fetch('HOME')}/#{NFS_MOUNT_DIRNAME} ]] && mkdir #{ENV.fetch('HOME')}/#{NFS_MOUNT_DIRNAME} && touch #{ENV.fetch('HOME')}/#{NFS_MOUNT_DIRNAME}/.metadata_never_index
-sudo mount -t nfs -o rw,bg,hard,nolocks,intr,sync #{VM_IP}:/home/#{USERNAME}/#{NFS_MOUNT_DIRNAME} #{ENV.fetch('HOME')}/#{NFS_MOUNT_DIRNAME}
+sudo mount -t nfs -o #{NFS_HOST_MOUNT_OPTS} #{VM_IP}:/home/#{USERNAME}/#{NFS_MOUNT_DIRNAME} #{ENV.fetch('HOME')}/#{NFS_MOUNT_DIRNAME}
 EOF
 
-unless File.exist?("./setup_routes")
-  File.open("./setup_routes", "w", 0700) {|f| f.puts osx_routes }
-end
-unless File.exist?("./mount_nfs_share")
-  File.open("./mount_nfs_share", "w", 0700) {|f| f.puts mount_nfs }
-end
+
+File.open("./setup_routes", "w", 0700) {|f| f.puts osx_routes } unless File.exist?("./setup_routes")
+
+File.open("./mount_nfs_share", "w", 0700) {|f| f.puts mount_nfs } unless File.exist?("./mount_nfs_share")
 
 require 'open3'
 class SetupDockerRouting < Vagrant.plugin('2')
