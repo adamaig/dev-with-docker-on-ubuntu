@@ -4,7 +4,8 @@ echo "** INSTALLING support software for development"
 sudo apt-get install -y zsh vim tmux fonts-powerline \
   nodejs-legacy ruby golang-go python-dev python-pip \
   silversearcher-ag imagemagick xauth xclip \
-  mysql-client postgresql-client
+  mysql-client postgresql-client \
+  libmysqlclient-dev libpq-dev
 
 pip install --upgrade pip
 
@@ -19,7 +20,7 @@ fi
 if [[ ! -d ~/.nvm ]]
 then
   echo "** INSTALLING NVM"
-  curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.31.7/install.sh | bash
+  curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.33.2/install.sh | bash
 fi
 
 if [[ ! -d ~/.rvm ]]
