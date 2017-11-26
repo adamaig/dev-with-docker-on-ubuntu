@@ -1,11 +1,23 @@
 #!/bin/bash
 
 echo "** INSTALLING support software for development"
-sudo apt-get install -y zsh vim tmux fonts-powerline \
+sudo add-apt-repository -y ppa:jonathonf/vim
+sudo apt-get update -y
+sudo apt-get install -y zsh vim fonts-powerline \
   nodejs-legacy ruby golang-go python-dev python-pip \
   silversearcher-ag imagemagick xauth xclip \
   mysql-client postgresql-client \
   libmysqlclient-dev libpq-dev
+
+echo "** INSTALLING tmux 2.6 from source"
+sudo apt-get -y remove tmux
+sudo apt-get install -y wget tar libevent-dev libncurses-dev
+VERSION=2.6 && mkdir ~/tmux-src && \
+  wget -qO- https://github.com/tmux/tmux/releases/download/${VERSION}/tmux-${VERSION}.tar.gz | tar xvz -C ~/tmux-src && \
+  cd ~/tmux-src/tmux* && \
+  ./configure && make -j"$(nproc)" && \
+  sudo make install && \
+  cd ~ && rm -rf ~/tmux-src
 
 pip install --upgrade pip
 
