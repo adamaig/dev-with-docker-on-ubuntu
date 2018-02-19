@@ -205,7 +205,6 @@ end
 Vagrant.configure("2") do |config|
   config.vm.box = "bento/ubuntu-16.04"
   config.vm.box_version = "= 2.3.0"
-  # config.vm.box_version = "201802.02.0"
   config.vm.box_check_update = true
 
   # Make sure you have XQuartz running on the host
@@ -340,7 +339,7 @@ Vagrant.configure("2") do |config|
     echo "/home/#{USERNAME}/#{NFS_MOUNT_DIRNAME} #{VM_GATEWAY_IP}(rw,sync,no_subtree_check,insecure,anonuid=$(id -u #{USERNAME}),anongid=$(id -g #{USERNAME}),all_squash)" >> /etc/exports
     exportfs -a
 
-    #sudo -u #{USERNAME} -i bash extras.sh
+    sudo -u #{USERNAME} -i bash extras.sh
   SHELL
 
   # Cleanup scripts
