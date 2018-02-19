@@ -285,4 +285,7 @@ if you use Alfred, as halting the box or other network disruptions may cause the
 Finder or other filesystem interaction to freeze while waiting on the mount to
 timeout. **If this occurs, a) unmount the share, and if that fails b) restart the
 guest, and unmount the share before halting.** Don't panic!
+2. The box this project is based on is older, so you may wish to start by specifying
+a newer box version, or run `apt-get dist-upgrade` to bring the system more up to date.
+3. To upgrade the kernel: `apt-get install --install-recommends linux-generic-hwe-16.04 xserver-xorg-hwe-16.04`
 

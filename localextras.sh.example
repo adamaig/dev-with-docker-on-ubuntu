@@ -2,6 +2,19 @@
 
 echo "Add personal customization to localextras.sh"
 
+#  sudo apt-get install -y silversearcher-ag imagemagick
+
+#  to activate the fonts see:
+#  http://askubuntu.com/questions/283908/how-can-i-install-and-use-powerline-plugin
+#  sudo apt-get install -y fonts-powerline
+#  sudo fc-cache -vf
+
+#  if [[ ! -d ~/.oh-my-zsh ]]
+#  then
+#    echo "** INSTALLING oh-my-zsh"
+#    sh -c "$(curl -fsSL https://raw.github.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"
+#  fi
+
 #  E.g. setup resources and projects
 #  git clone git@github.com:adamaig/dotfiles.git \
 #    && pushd dotfiles \

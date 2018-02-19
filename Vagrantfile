@@ -49,9 +49,9 @@ if File.exist?("config.yml")
 end
 
 # Specifies the docker-engine apt package version
-DOCKER_ENGINE_VERSION="1.13.1-0"
+DOCKER_ENGINE_VERSION="17.12.0~ce-0~ubuntu"
 # Specifies the docker-compose release version
-DOCKER_COMPOSE_VERSION="1.11.2"
+DOCKER_COMPOSE_VERSION="1.19.0"
 
 # Set this to true in order to enable the gui and install necessary packages
 ENABLE_GUI = config_options["enable_gui"]
@@ -111,9 +111,20 @@ docker_drop_in_conf = <<EOF
 Before=dnsmasq.service
 
 [Service]
+# Reset the ExecStart values due to systemd quirk
 ExecStart=
-ExecStart=/usr/bin/docker daemon -H fd:// -H tcp://#{VM_IP}:2375 --bip=#{DOCKER_BRIDGE_CIDR}
+# Manage configuration options in /etc/docker/daemon.json
+ExecStart=/usr/bin/dockerd
+# Ensure traffic to containers is not dropped
 ExecStartPost=/sbin/iptables -P FORWARD ACCEPT
+# iptables -I DOCKER-USER -i ext_if ! -s #{VM_IP} -j DROP
+EOF
+
+docker_daemon_json = <<EOF
+{
+  "hosts": ["fd://", "tcp://0.0.0.0:2375"],
+  "bip": "#{DOCKER_BRIDGE_CIDR}"
+}
 EOF
 
 # This script is emitted to allow easy reinstantiation of the OSX routes to the
@@ -221,30 +232,43 @@ Vagrant.configure("2") do |config|
       LC_CTYPE="en_US.UTF-8" LC_MESSAGES="en_US.UTF-8" \
       LC_MONETARY="en_US.UTF-8" LC_NUMERIC="en_US.UTF-8" LC_TIME="en_US.UTF-8"
 
+    # Remove any prior docker versions
+    apt-get -qq remove docker docker-engine docker.io
+
     echo "*** Running setup from docker installation"
-    apt-get update -y
-    apt-get install -y --no-install-recommends \
+    apt-get -qq update -y
+    apt-get -qq install -y --no-install-recommends \
       apt-transport-https ca-certificates curl software-properties-common
-    curl -fsSL https://apt.dockerproject.org/gpg | sudo apt-key add -
-    add-apt-repository "deb https://apt.dockerproject.org/repo/ ubuntu-$(lsb_release -cs) main"
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+    add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
 
-    apt-get update -y
-    apt-get install -y ntp git vim sqlite debconf-utils \
+    apt-get -qq update -y
+    apt-get -qq install -y ntp git vim sqlite debconf-utils \
       network-manager dnsmasq nfs-kernel-server
-    apt-get install -y docker-engine=#{DOCKER_ENGINE_VERSION}~ubuntu-$(lsb_release -cs)
 
-    if [ ! -f /usr/local/bin/docker-compose ] || [ ! `docker-compose --version` =~ "#{DOCKER_COMPOSE_VERSION}" ] ; then
-      curl -L https://github.com/docker/compose/releases/download/#{DOCKER_COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m) -o /usr/local/bin/docker-compose
+    echo "*** Installing Docker CE"
+    apt-get install -y docker-ce=#{DOCKER_ENGINE_VERSION}
+
+    echo "** Checking if docker-compose installation is #{DOCKER_COMPOSE_VERSION}"
+    if [[ (! -f /usr/local/bin/docker-compose) || (! `docker-compose --version` =~ "#{DOCKER_COMPOSE_VERSION}") ]]
+    then
+      url_base="https://github.com/docker/compose/releases/download/"
+      version="#{DOCKER_COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m`"
+      curl -s -L $url_base$version -o /usr/local/bin/docker-compose
       chmod +x /usr/local/bin/docker-compose
     fi
 
     sed -i "/^GRUB_CMDLINE_LINUX/d" /etc/default/grub
     echo 'GRUB_CMDLINE_LINUX="cgroup_enable=memory swapaccount=1"' >> /etc/default/grub
+    update-grub
 
     echo "** Modifying NetworkManager and dnsmasq to support routing to service.docker"
     sed -e 's/.*bind-interfaces/# bind-interfaces/' -i /etc/dnsmasq.d/network-manager
     sed -e 's/.*dns=dnsmasq/# dns=dnsmasq/' -i /etc/NetworkManager/NetworkManager.conf
     echo "#{dnsmasq_docker_conf}" > /etc/dnsmasq.d/10-docker
+
+    echo "** Adding /etc/docker/daemon.json configuration"
+    echo '#{docker_daemon_json}' >> /etc/docker/daemon.json
 
     echo "** Setting up systemd drop-in config for docker daemon"
     [ ! -d /etc/systemd/system/docker.service.d ] && mkdir /etc/systemd/system/docker.service.d
