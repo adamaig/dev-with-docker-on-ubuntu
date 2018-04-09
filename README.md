@@ -178,7 +178,7 @@ In this example a new 60GB disk will be created.
 
    # Replace the original drive:
    VBoxManage storageattach dev-on-ub --storagectl "SATA Controller" --port 0 \
-     --device 0 --type hdd  --medium ~/VirtualBox\ VMs/dev-on-ub/ubuntu-16.04-amd64-disk.vdi
+     --device 0 --type hdd  --medium ~/VirtualBox\ VMs/dev-on-ub/ubuntu-16.04-amd64-disk1.vdi
    ```
 
 3. Configure the boot order (1: optical drive; 2: disk):
