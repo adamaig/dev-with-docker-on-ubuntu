@@ -49,9 +49,9 @@ if File.exist?("config.yml")
 end
 
 # Specifies the docker-engine apt package version
-DOCKER_ENGINE_VERSION="17.12.0~ce-0~ubuntu"
+DOCKER_ENGINE_VERSION="5:18.09.5~3-0~ubuntu-xenial"
 # Specifies the docker-compose release version
-DOCKER_COMPOSE_VERSION="1.19.0"
+DOCKER_COMPOSE_VERSION="1.24.0"
 
 # Set this to true in order to enable the gui and install necessary packages
 ENABLE_GUI = config_options["enable_gui"]
@@ -247,7 +247,9 @@ Vagrant.configure("2") do |config|
       network-manager dnsmasq nfs-kernel-server
 
     echo "*** Installing Docker CE"
-    apt-get install -y docker-ce=#{DOCKER_ENGINE_VERSION}
+    apt-get install -y docker-ce=#{DOCKER_ENGINE_VERSION} \
+      docker-ce-cli=#{DOCKER_ENGINE_VERSION} \
+      containerd.io
 
     echo "** Checking if docker-compose installation is #{DOCKER_COMPOSE_VERSION}"
     if [[ (! -f /usr/local/bin/docker-compose) || (! `docker-compose --version` =~ "#{DOCKER_COMPOSE_VERSION}") ]]
