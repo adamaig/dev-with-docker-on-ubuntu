@@ -237,15 +237,15 @@ Vagrant.configure("2") do |config|
       LC_MONETARY="en_US.UTF-8" LC_NUMERIC="en_US.UTF-8" LC_TIME="en_US.UTF-8"
 
     echo "*** Updating apt index"
-    apt-get -qq update -y
-    apt-get -qq install -y --no-install-recommends \
+    apt-get update -y
+    apt-get install -y --no-install-recommends \
       debconf-utils apt-transport-https ca-certificates software-properties-common
 
     echo "*** Installing base services: ntp, dnsmasq, nfs-kernel-server, network-manager"
-    apt-get -qq install -y ntp network-manager dnsmasq nfs-kernel-server
+    apt-get install -y ntp network-manager dnsmasq nfs-kernel-server
 
     echo "*** Installing tools: curl, wget, git, vim, sqlite"
-    apt-get -qq install -y curl wget git vim sqlite
+    apt-get install -y curl wget git vim sqlite
 
     echo "** Configuring timezone"
     timedatectl set-timezone #{TIMEZONE}
@@ -266,12 +266,12 @@ Vagrant.configure("2") do |config|
   config.vm.provision "shell", name: "docker_setup", inline: <<-SHELL
     echo "*** Running setup from docker installation"
     # Remove any prior docker versions
-    apt-get -qq remove docker docker-engine docker.io
+    apt-get remove docker docker-engine docker.io
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
     add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
 
     echo "*** Updating apt index"
-    apt-get -qq update -y
+    apt-get update -y
 
     echo "*** Installing Docker CE"
     apt-get install -y docker-ce=#{DOCKER_ENGINE_VERSION}
