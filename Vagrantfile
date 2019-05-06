@@ -1,12 +1,12 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
-require "yaml"
-require "erb"
-require "pp"
+require 'yaml'
+require 'erb'
+require 'pp'
 
 # Default configuration options
 config_options = {
-  "user" => { "username" => ENV.fetch("USER"), "shell" => ENV.fetch("SHELL") },
+  "user" => {"username" => ENV.fetch('USER'), "shell" => ENV.fetch('SHELL')},
   "enable_gui" => false,
   "vm" => {
     "name" => "dev-on-ub",
@@ -28,10 +28,9 @@ config_options = {
     "host_mount_options" => "rw,bg,hard,nolocks,intr,sync"
   }
 }
-
 class Hash
   def options_merge(other)
-    merge(other) do |key, self_v, other_v|
+    self.merge(other) do |key, self_v, other_v|
       if self_v.is_a?(Hash)
         self_v.options_merge(other_v)
       else
@@ -40,10 +39,10 @@ class Hash
     end
   end
 end
-
 # Read option file if it exists
 if File.exist?("config.yml")
   config_yaml = YAML.load(ERB.new(File.read("config.yml")).result)
+  #config_options.merge!()
   config_options = config_options.options_merge(config_yaml)
   puts "** Running with options:"
   pp config_options
@@ -99,12 +98,13 @@ TIMEZONE = config_options["tz"]
 
 # These HEREDOCs are additional config files used to setup the docker development
 # environment and dns lookups
-dnsmasq_base_conf = <<EOF
+dnsmasq_docker_conf = <<EOF
 listen-address=127.0.0.1
+listen-address=#{DOCKER_BRIDGE_IP}
 listen-address=#{VM_IP}
-server=8.8.8.8
-server=8.8.4.4
+server=/.service.#{CONSUL_DOMAIN}/127.0.0.1##{CONSUL_DNS_PORT}
 EOF
+
 
 dnsmasq_docker_conf = <<EOF
 listen-address=#{DOCKER_BRIDGE_IP}
@@ -382,47 +382,9 @@ Vagrant.configure("2") do |config|
   if ENABLE_GUI
     config.vm.provision "file", source: "./enable_gui.sh", destination: "/tmp/enable_gui.sh"
     config.vm.provision "shell", name: "enable_gui", inline: <<-SHELL
-    cat ~#{USERNAME}/.ssh/id_rsa.pub | xargs -I{} echo '^{}$' | xargs -I{} grep -v -e '{}' ~#{USERNAME}/.ssh/authorized_keys > ~#{USERNAME}/.ssh/cleaned_authorized_keys
-    mv ~#{USERNAME}/.ssh/cleaned_authorized_keys ~#{USERNAME}/.ssh/authorized_keys
-    cat ~#{USERNAME}/.ssh/id_rsa.pub >> ~#{USERNAME}/.ssh/authorized_keys
-    chmod 0600 ~#{USERNAME}/.ssh/authorized_keys
-    sudo -u #{USERNAME} -i ssh-keygen -R github.com
-    sudo -u #{USERNAME} -i ssh-keygen -R bitbucket.org
-    ssh-keyscan -H github.com bitbucket.org >> ~#{USERNAME}/.ssh/known_hosts
-
-    mv /tmp/extras.sh /tmp/localextras.sh ~#{USERNAME}/
-    [[ ! -d ~#{USERNAME}/#{NFS_MOUNT_DIRNAME} ]] && mkdir ~#{USERNAME}/#{NFS_MOUNT_DIRNAME}
-    echo "File from #{VM_NAME}" > ~#{USERNAME}/#{NFS_MOUNT_DIRNAME}/README.txt
-
-    [[ ! -d ~#{USERNAME}/consul-registrator-setup ]] && mkdir ~#{USERNAME}/consul-registrator-setup/
-    mv /tmp/consul.json /tmp/docker-compose.yml ~#{USERNAME}/consul-registrator-setup/
-    sed -i -e 's/docker\./#{CONSUL_DOMAIN}./' ~#{USERNAME}/consul-registrator-setup/consul.json
-
-    chown -R #{USERNAME}: ~#{USERNAME}
-
-    sed -i "/^\\/home\\/#{USERNAME}\\/#{NFS_MOUNT_DIRNAME} /d" /etc/exports
-    echo "/home/#{USERNAME}/#{NFS_MOUNT_DIRNAME} #{VM_GATEWAY_IP}(rw,sync,no_subtree_check,insecure,anonuid=$(id -u #{USERNAME}),anongid=$(id -g #{USERNAME}),all_squash)" >> /etc/exports
-    exportfs -a
-
-    sudo -u #{USERNAME} -i bash extras.sh
-  SHELL
-
-  # Cleanup scripts
-  config.vm.provision "shell", name: "cleanup", inline: <<-SHELL
-    echo "** Cleaning up old packaged with 'apt autoremove' ... "
-    apt-get autoremove -y
-
-    echo "** Linking /Users -> /home in the guest. Supports volume mounting in docker-compose path expansion over the DOCKER_HOST tcp connection."
-    [[ ! -L /Users ]] && ln -s /home /Users
-
-    echo "** Run 'export DOCKER_HOST="tcp://#{VM_IP}:2375"' on this host to interact with docker in the vagrant guest"
-  SHELL
-
-  if ENABLE_GUI
-    config.vm.provision "file", source: "./enable_gui.sh", destination: "/tmp/enable_gui.sh"
-    config.vm.provision "shell", name: "enable_gui", inline: <<-SHELL
       mv /tmp/enable_gui.sh ~#{USERNAME}/
       sudo -u #{USERNAME} -i bash enable_gui.sh
     SHELL
   end
 end
+
