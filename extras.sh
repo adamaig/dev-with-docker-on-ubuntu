@@ -6,6 +6,7 @@ sudo apt-get update -y
 sudo apt-get install -y zsh vim xauth xclip \
   mysql-client libmysqlclient-dev \
   postgresql-client libpq-dev \
+  sqlite3 libbz2 \
   tar wget curl libevent-dev libncurses-dev
 
 echo "** INSTALLING tmux 2.6 from source"
@@ -17,15 +18,5 @@ VERSION=2.6 && mkdir ~/tmux-src && \
   sudo make install && \
   cd ~ && rm -rf ~/tmux-src
 
-echo "** INSTALLING common programming packages"
-sudo apt-get install -y nodejs-legacy ruby golang-go python-dev python-pip
-pip install --upgrade pip
-
 [[ -f ~/localextras.sh ]] && bash ~/localextras.sh
-
-echo "** Consider installing MySQL, PostgreSQL, and Redis"
-# sudo apt-get install -y postgresql libpq-dev redis-server mysql-server
-
-# If there are problems with font configuration this may help
-#sudo dpkg-reconfigure console-setup
 

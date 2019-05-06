@@ -1,12 +1,12 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
-require 'yaml'
-require 'erb'
-require 'pp'
+require "yaml"
+require "erb"
+require "pp"
 
 # Default configuration options
 config_options = {
-  "user" => {"username" => ENV.fetch('USER'), "shell" => ENV.fetch('SHELL')},
+  "user" => { "username" => ENV.fetch("USER"), "shell" => ENV.fetch("SHELL") },
   "enable_gui" => false,
   "vm" => {
     "name" => "dev-on-ub",
@@ -28,9 +28,10 @@ config_options = {
     "host_mount_options" => "rw,bg,hard,nolocks,intr,sync"
   }
 }
+
 class Hash
   def options_merge(other)
-    self.merge(other) do |key, self_v, other_v|
+    merge(other) do |key, self_v, other_v|
       if self_v.is_a?(Hash)
         self_v.options_merge(other_v)
       else
@@ -39,10 +40,10 @@ class Hash
     end
   end
 end
+
 # Read option file if it exists
 if File.exist?("config.yml")
   config_yaml = YAML.load(ERB.new(File.read("config.yml")).result)
-  #config_options.merge!()
   config_options = config_options.options_merge(config_yaml)
   puts "** Running with options:"
   pp config_options
@@ -98,10 +99,15 @@ TIMEZONE = config_options["tz"]
 
 # These HEREDOCs are additional config files used to setup the docker development
 # environment and dns lookups
-dnsmasq_docker_conf = <<EOF
+dnsmasq_base_conf = <<EOF
 listen-address=127.0.0.1
-listen-address=#{DOCKER_BRIDGE_IP}
 listen-address=#{VM_IP}
+server=8.8.8.8
+server=8.8.4.4
+EOF
+
+dnsmasq_docker_conf = <<EOF
+listen-address=#{DOCKER_BRIDGE_IP}
 server=/.service.#{CONSUL_DOMAIN}/127.0.0.1##{CONSUL_DNS_PORT}
 EOF
 
@@ -153,14 +159,12 @@ echo '** Mounting ubuntu NFS /home/#{USERNAME}/#{NFS_MOUNT_DIRNAME} to ~/#{NFS_M
 sudo mount -t nfs -o #{NFS_HOST_MOUNT_OPTS} #{VM_IP}:/home/#{USERNAME}/#{NFS_MOUNT_DIRNAME} #{ENV.fetch('HOME')}/#{NFS_MOUNT_DIRNAME}
 EOF
 
+File.open("./setup_routes", "w", 0700) { |f| f.puts osx_routes } unless File.exist?("./setup_routes")
+File.open("./mount_nfs_share", "w", 0700) { |f| f.puts mount_nfs } unless File.exist?("./mount_nfs_share")
 
-File.open("./setup_routes", "w", 0700) {|f| f.puts osx_routes } unless File.exist?("./setup_routes")
-
-File.open("./mount_nfs_share", "w", 0700) {|f| f.puts mount_nfs } unless File.exist?("./mount_nfs_share")
-
-require 'open3'
-class SetupDockerRouting < Vagrant.plugin('2')
-  name 'setup_docker_routing'
+require "open3"
+class SetupDockerRouting < Vagrant.plugin("2")
+  name "setup_docker_routing"
 
   class Action
     def initialize(app, env)
@@ -186,7 +190,7 @@ class SetupDockerRouting < Vagrant.plugin('2')
       print "#{log} ... "
       status = nil
       Open3.popen2e(cmd) do |input, output, thr|
-        output.each {|line| puts line }
+        output.each { |line| puts line }
         status = thr.value
       end
       if status.success?
@@ -204,7 +208,6 @@ end
 
 Vagrant.configure("2") do |config|
   config.vm.box = "bento/ubuntu-16.04"
-  config.vm.box_version = "= 2.3.0"
   config.vm.box_check_update = true
 
   # Make sure you have XQuartz running on the host
@@ -215,7 +218,7 @@ Vagrant.configure("2") do |config|
   config.vm.network "private_network", ip: VM_IP
 
   config.vm.provider "virtualbox" do |vb|
-    vb.name = "#{VM_NAME}"
+    vb.name = VM_NAME
     vb.memory = config_options["vm"]["memory"]
     vb.cpus = config_options["vm"]["cpus"]
     if ENABLE_GUI
@@ -232,19 +235,42 @@ Vagrant.configure("2") do |config|
       LC_CTYPE="en_US.UTF-8" LC_MESSAGES="en_US.UTF-8" \
       LC_MONETARY="en_US.UTF-8" LC_NUMERIC="en_US.UTF-8" LC_TIME="en_US.UTF-8"
 
-    # Remove any prior docker versions
-    apt-get -qq remove docker docker-engine docker.io
+    echo "*** Updating apt index"
+    apt-get update -y
+    apt-get install -y --no-install-recommends \
+      debconf-utils apt-transport-https ca-certificates software-properties-common
 
+    echo "*** Installing base services: ntp, dnsmasq, nfs-kernel-server, network-manager"
+    apt-get install -y ntp network-manager dnsmasq nfs-kernel-server
+
+    echo "*** Installing tools: curl, wget, git, vim, sqlite"
+    apt-get install -y curl wget git vim sqlite
+
+    echo "** Configuring timezone"
+    timedatectl set-timezone #{TIMEZONE}
+
+    echo "** Modifying NetworkManager and dnsmasq to support routing to localhost"
+    sed -e 's/.*bind-interfaces/# bind-interfaces/' -i /etc/dnsmasq.d/network-manager
+    sed -e 's/.*dns=dnsmasq/# dns=dnsmasq/' -i /etc/NetworkManager/NetworkManager.conf
+    echo "#{dnsmasq_base_conf}" > /etc/dnsmasq.d/10-base-dns
+
+    echo "Reloading systemclt configs and restarting services"
+    systemctl daemon-reload
+    service ntp restart
+    service nfs-kernel-server restart
+    service network-manager restart
+    service dnsmasq restart
+  SHELL
+
+  config.vm.provision "shell", name: "docker_setup", inline: <<-SHELL
     echo "*** Running setup from docker installation"
-    apt-get -qq update -y
-    apt-get -qq install -y --no-install-recommends \
-      apt-transport-https ca-certificates curl software-properties-common
+    # Remove any prior docker versions
+    apt-get remove docker docker-engine docker.io
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
     add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
 
-    apt-get -qq update -y
-    apt-get -qq install -y ntp git vim sqlite debconf-utils \
-      network-manager dnsmasq nfs-kernel-server
+    echo "*** Updating apt index"
+    apt-get update -y
 
     echo "*** Installing Docker CE"
     apt-get install -y docker-ce=#{DOCKER_ENGINE_VERSION} \
@@ -267,7 +293,7 @@ Vagrant.configure("2") do |config|
     echo "** Modifying NetworkManager and dnsmasq to support routing to service.docker"
     sed -e 's/.*bind-interfaces/# bind-interfaces/' -i /etc/dnsmasq.d/network-manager
     sed -e 's/.*dns=dnsmasq/# dns=dnsmasq/' -i /etc/NetworkManager/NetworkManager.conf
-    echo "#{dnsmasq_docker_conf}" > /etc/dnsmasq.d/10-docker
+    echo "#{dnsmasq_docker_conf}" > /etc/dnsmasq.d/11-docker
 
     echo "** Adding /etc/docker/daemon.json configuration"
     echo '#{docker_daemon_json}' >> /etc/docker/daemon.json
@@ -276,14 +302,8 @@ Vagrant.configure("2") do |config|
     [ ! -d /etc/systemd/system/docker.service.d ] && mkdir /etc/systemd/system/docker.service.d
     echo "#{docker_drop_in_conf}" > /etc/systemd/system/docker.service.d/dev-on-docker.conf
 
-    echo "** Configuring timezone"
-    timedatectl set-timezone #{TIMEZONE}
-
     echo "Reloading systemclt configs and restarting services"
     systemctl daemon-reload
-    service ntp restart
-    service nfs-kernel-server restart
-    service network-manager restart
     service dnsmasq restart
     service docker restart
 
@@ -293,6 +313,10 @@ Vagrant.configure("2") do |config|
     usermod -aG admin,docker vagrant
   SHELL
 
+  config.vm.provision "shell", name: "kube_setup", inline: <<~SHELL
+    snap install microk8s --classic
+  SHELL
+
   [
     { s: "~#{USERNAME}/.ssh/id_rsa", d: "/tmp/id_rsa" },
     { s: "~#{USERNAME}/.ssh/id_rsa.pub", d: "/tmp/id_rsa.pub" },
@@ -300,7 +324,7 @@ Vagrant.configure("2") do |config|
     { s: "./extras.sh", d: "/tmp/extras.sh" },
     { s: "./localextras.sh", d: "/tmp/localextras.sh" },
     { s: "./consul-registrator-setup/consul.json", d: "/tmp/consul.json" },
-    { s: "./consul-registrator-setup/docker-compose.yml", d: "/tmp/docker-compose.yml" },
+    { s: "./consul-registrator-setup/docker-compose.yml", d: "/tmp/docker-compose.yml" }
   ].each do |x|
     config.vm.provision "file", source: x[:s], destination: x[:d]
   end
@@ -358,9 +382,47 @@ Vagrant.configure("2") do |config|
   if ENABLE_GUI
     config.vm.provision "file", source: "./enable_gui.sh", destination: "/tmp/enable_gui.sh"
     config.vm.provision "shell", name: "enable_gui", inline: <<-SHELL
+    cat ~#{USERNAME}/.ssh/id_rsa.pub | xargs -I{} echo '^{}$' | xargs -I{} grep -v -e '{}' ~#{USERNAME}/.ssh/authorized_keys > ~#{USERNAME}/.ssh/cleaned_authorized_keys
+    mv ~#{USERNAME}/.ssh/cleaned_authorized_keys ~#{USERNAME}/.ssh/authorized_keys
+    cat ~#{USERNAME}/.ssh/id_rsa.pub >> ~#{USERNAME}/.ssh/authorized_keys
+    chmod 0600 ~#{USERNAME}/.ssh/authorized_keys
+    sudo -u #{USERNAME} -i ssh-keygen -R github.com
+    sudo -u #{USERNAME} -i ssh-keygen -R bitbucket.org
+    ssh-keyscan -H github.com bitbucket.org >> ~#{USERNAME}/.ssh/known_hosts
+
+    mv /tmp/extras.sh /tmp/localextras.sh ~#{USERNAME}/
+    [[ ! -d ~#{USERNAME}/#{NFS_MOUNT_DIRNAME} ]] && mkdir ~#{USERNAME}/#{NFS_MOUNT_DIRNAME}
+    echo "File from #{VM_NAME}" > ~#{USERNAME}/#{NFS_MOUNT_DIRNAME}/README.txt
+
+    [[ ! -d ~#{USERNAME}/consul-registrator-setup ]] && mkdir ~#{USERNAME}/consul-registrator-setup/
+    mv /tmp/consul.json /tmp/docker-compose.yml ~#{USERNAME}/consul-registrator-setup/
+    sed -i -e 's/docker\./#{CONSUL_DOMAIN}./' ~#{USERNAME}/consul-registrator-setup/consul.json
+
+    chown -R #{USERNAME}: ~#{USERNAME}
+
+    sed -i "/^\\/home\\/#{USERNAME}\\/#{NFS_MOUNT_DIRNAME} /d" /etc/exports
+    echo "/home/#{USERNAME}/#{NFS_MOUNT_DIRNAME} #{VM_GATEWAY_IP}(rw,sync,no_subtree_check,insecure,anonuid=$(id -u #{USERNAME}),anongid=$(id -g #{USERNAME}),all_squash)" >> /etc/exports
+    exportfs -a
+
+    sudo -u #{USERNAME} -i bash extras.sh
+  SHELL
+
+  # Cleanup scripts
+  config.vm.provision "shell", name: "cleanup", inline: <<-SHELL
+    echo "** Cleaning up old packaged with 'apt autoremove' ... "
+    apt-get autoremove -y
+
+    echo "** Linking /Users -> /home in the guest. Supports volume mounting in docker-compose path expansion over the DOCKER_HOST tcp connection."
+    [[ ! -L /Users ]] && ln -s /home /Users
+
+    echo "** Run 'export DOCKER_HOST="tcp://#{VM_IP}:2375"' on this host to interact with docker in the vagrant guest"
+  SHELL
+
+  if ENABLE_GUI
+    config.vm.provision "file", source: "./enable_gui.sh", destination: "/tmp/enable_gui.sh"
+    config.vm.provision "shell", name: "enable_gui", inline: <<-SHELL
       mv /tmp/enable_gui.sh ~#{USERNAME}/
       sudo -u #{USERNAME} -i bash enable_gui.sh
     SHELL
   end
 end
-
