@@ -98,7 +98,7 @@ TIMEZONE = config_options["tz"]
 
 # These HEREDOCs are additional config files used to setup the docker development
 # environment and dns lookups
-dnsmasq_docker_conf = <<EOF
+dnsmasq_base_conf = <<EOF
 listen-address=127.0.0.1
 listen-address=#{DOCKER_BRIDGE_IP}
 listen-address=#{VM_IP}
@@ -387,4 +387,3 @@ Vagrant.configure("2") do |config|
     SHELL
   end
 end
-
