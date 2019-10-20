@@ -205,7 +205,7 @@ class SetupDockerRouting < Vagrant.plugin("2")
 end
 
 Vagrant.configure("2") do |config|
-  config.vm.box = "bento/ubuntu-16.04"
+  config.vm.box = "bento/ubuntu-18.04"
   config.vm.box_check_update = true
 
   # Make sure you have XQuartz running on the host
@@ -229,27 +229,28 @@ Vagrant.configure("2") do |config|
   end
 
   config.vm.provision "base_setup", type: "shell", inline: <<-SHELL
+    echo "** Configuring locale and timezone"
     update-locale LANG="en_US.UTF-8" LC_COLLATE="en_US.UTF-8" \
       LC_CTYPE="en_US.UTF-8" LC_MESSAGES="en_US.UTF-8" \
       LC_MONETARY="en_US.UTF-8" LC_NUMERIC="en_US.UTF-8" LC_TIME="en_US.UTF-8"
 
-    echo "*** Updating apt index"
-    apt-get update -y
-    apt-get install -y --no-install-recommends \
-      debconf-utils apt-transport-https ca-certificates software-properties-common
-
-    echo "*** Installing base services: ntp, dnsmasq, nfs-kernel-server, network-manager"
-    apt-get install -y ntp network-manager dnsmasq nfs-kernel-server
-
-    echo "*** Installing tools: curl, wget, git, vim, sqlite"
-    apt-get install -y curl wget git vim sqlite
-
-    echo "** Configuring timezone"
     timedatectl set-timezone #{TIMEZONE}
 
-    echo "** Modifying NetworkManager and dnsmasq to support routing to localhost"
-    sed -e 's/.*bind-interfaces/# bind-interfaces/' -i /etc/dnsmasq.d/network-manager
-    sed -e 's/.*dns=dnsmasq/# dns=dnsmasq/' -i /etc/NetworkManager/NetworkManager.conf
+    echo "*** Updating apt index"
+    apt-get update -y
+    apt-get install -y -qq --no-install-recommends \
+      apt-transport-https \
+      ca-certificates \
+      debconf-utils \
+      software-properties-common
+
+    echo "*** Installing base services: ntp, dnsmasq, nfs-kernel-server, network-manager"
+    apt-get install -y -qq ntp network-manager dnsmasq nfs-kernel-server
+
+    echo "*** Installing tools: curl, wget, git, vim, sqlite"
+    apt-get install -y -qq curl wget git vim sqlite
+
+    echo "** Add dnsmasq support for routing to localhost"
     echo "#{dnsmasq_base_conf}" > /etc/dnsmasq.d/10-base-dns
 
     echo "Reloading systemclt configs and restarting services"
@@ -289,8 +290,6 @@ Vagrant.configure("2") do |config|
     update-grub
 
     echo "** Modifying NetworkManager and dnsmasq to support routing to service.docker"
-    sed -e 's/.*bind-interfaces/# bind-interfaces/' -i /etc/dnsmasq.d/network-manager
-    sed -e 's/.*dns=dnsmasq/# dns=dnsmasq/' -i /etc/NetworkManager/NetworkManager.conf
     echo "#{dnsmasq_docker_conf}" > /etc/dnsmasq.d/11-docker
 
     echo "** Adding /etc/docker/daemon.json configuration"
