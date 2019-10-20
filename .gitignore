@@ -4,3 +4,4 @@ localextras.sh
 mount_nfs_share
 setup_routes
 config.yml
+provisioning/*

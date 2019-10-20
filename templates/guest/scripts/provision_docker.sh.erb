@@ -1,0 +1,40 @@
+#!/bin/bash
+
+echo "*** Running setup for docker installation"
+apt-get remove docker docker-engine docker.io containerd runc
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
+add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+
+echo "*** Updating apt index"
+apt-get update -y -qq
+
+echo "*** Installing Docker CE"
+apt-get install -y -qq docker-ce=<%= DOCKER_ENGINE_VERSION %> \
+  docker-ce-cli=<%= DOCKER_ENGINE_VERSION %> \
+  containerd.io
+
+echo "** Installing docker-compose version=<%= DOCKER_COMPOSE_VERSION %>"
+url_base="https://github.com/docker/compose/releases/download/"
+version="<%= DOCKER_COMPOSE_VERSION %>/docker-compose-`uname -s`-`uname -m`"
+curl -s -L $url_base$version -o /usr/local/bin/docker-compose && \
+  chmod +x /usr/local/bin/docker-compose
+
+echo "** Add support for routing to service.docker"
+cp /home/vagrant/provisioning/dnsmasq_docker.conf /etc/dnsmasq.d/11-docker
+
+echo "** Adding /etc/docker/daemon.json configuration"
+cp /home/vagrant/provisioning/docker_daemon.json /etc/docker/daemon.json
+
+echo "** Setting up systemd drop-in config for docker daemon"
+[ ! -d /etc/systemd/system/docker.service.d ] && mkdir /etc/systemd/system/docker.service.d
+cp /home/vagrant/provisioning/docker_drop_in.conf /etc/systemd/system/docker.service.d/dev-on-docker.conf
+
+echo "Reloading systemclt configs and restarting services"
+systemctl daemon-reload
+service dnsmasq restart
+service docker restart
+
+echo "creating admin and docker groups, adding vagrant user"
+groupadd -f docker
+groupadd -f admin
+usermod -aG admin,docker vagrant

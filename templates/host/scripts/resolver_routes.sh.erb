@@ -1,0 +1,12 @@
+#!/bin/bash
+
+echo '** Adding resolver directory if it does not exist'
+[[ ! -d /etc/resolver ]] && sudo mkdir -p /etc/resolver
+
+echo '** Adding/Replacing *.docker resolver (replacing to ensure OSX sees the change)'
+[[ -f /etc/resolver/<%= CONSUL_DOMAIN %> ]] && sudo rm -f /etc/resolver/<%= CONSUL_DOMAIN %>
+sudo bash -c "printf '%s\n%s\n' 'nameserver <%= VM_IP %>' > /etc/resolver/<%= CONSUL_DOMAIN %>"
+
+echo '** Adding routes'
+sudo route -n delete <%= DOCKER_SUBNET_CIDR %> <%= VM_IP %>
+sudo route -n add <%= DOCKER_SUBNET_CIDR %> <%= VM_IP %>

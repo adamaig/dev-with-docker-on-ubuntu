@@ -1,0 +1,61 @@
+#!/bin/bash
+
+function create_user() {
+  apt-get install -y -qq $(basename <%= SHELL %>)
+  [[ -z "$(getent passwd <%= USERNAME %>)" ]] && \
+    adduser --force-badname --uid 9999 --shell=/bin/$(basename <%= SHELL %>) --disabled-password --gecos "<%= USERNAME %>" <%= USERNAME %>
+  usermod -G docker,admin,sudo,staff <%= USERNAME %>
+  echo "<%= USERNAME %> ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/<%= USERNAME %>
+
+  return 0
+}
+
+function setup_user_ssh_configs() {
+  echo "** Setting up ssh keys and hosts"
+  [[ ! -d ~<%= USERNAME %>/.ssh ]] && mkdir ~<%= USERNAME %>/.ssh
+  chmod 0700 ~<%= USERNAME %>/.ssh
+  mv ~vagrant/provisioning/configs/ssh ~<%= USERNAME %>/.ssh/
+
+  echo "** Cleaning up ssh authorized_keys and known_hosts"
+  cat ~<%= USERNAME %>/.ssh/id_rsa.pub | \
+    xargs -I{} echo '^{}$' | \
+    xargs -I{} grep -v -e '{}' ~<%= USERNAME %>/.ssh/authorized_keys > ~<%= USERNAME %>/.ssh/cleaned_authorized_keys
+
+  mv ~<%= USERNAME %>/.ssh/cleaned_authorized_keys ~<%= USERNAME %>/.ssh/authorized_keys
+  cat ~<%= USERNAME %>/.ssh/id_rsa.pub >> ~<%= USERNAME %>/.ssh/authorized_keys
+  chmod 0600 ~<%= USERNAME %>/.ssh/authorized_keys
+  sudo -u <%= USERNAME %> -i ssh-keygen -R github.com
+  sudo -u <%= USERNAME %> -i ssh-keygen -R bitbucket.org
+  ssh-keyscan -H github.com bitbucket.org >> ~<%= USERNAME %>/.ssh/known_hosts
+
+  return 0
+}
+
+function setup_nfs_share() {
+  [[ ! -d ~<%= USERNAME %>/<%= NFS_MOUNT_DIRNAME %> ]] && mkdir ~<%= USERNAME %>/<%= NFS_MOUNT_DIRNAME %>
+
+  sed -i "/^\\/home\\/<%= USERNAME %>\\/<%= NFS_MOUNT_DIRNAME %>/d" /etc/exports
+  echo "/home/<%= USERNAME %>/<%= NFS_MOUNT_DIRNAME %> <%= VM_GATEWAY_IP %>(rw,sync,no_subtree_check,insecure,anonuid=$(id -u <%= USERNAME %>),anongid=$(id -g <%= USERNAME %>),all_squash)" >> /etc/exports
+
+  exportfs -a
+
+  echo "File from <%= VM_NAME %>" > ~<%= USERNAME %>/<%= NFS_MOUNT_DIRNAME %>/README.txt
+
+  return 0
+}
+
+function copy_consul_example() {
+  [[ ! -d ~<%= USERNAME %>/consul-registrator-setup ]] && mkdir ~<%= USERNAME %>/consul-registrator-setup/
+  mv /tmp/consul.json /tmp/docker-compose.yml ~<%= USERNAME %>/consul-registrator-setup/
+  sed -i -e 's/docker\./<%= CONSUL_DOMAIN %>./' ~<%= USERNAME %>/consul-registrator-setup/consul.json
+}
+
+mv /tmp/extras.sh /tmp/localextras.sh ~<%= USERNAME %>/
+
+
+create_user
+setup_user_ssh_configs
+setup_nfs_share
+
+chown -R <%= USERNAME %>: ~<%= USERNAME %>
+sudo -u <%= USERNAME %> -i bash extras.sh

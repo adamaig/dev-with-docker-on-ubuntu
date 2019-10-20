@@ -1,0 +1,12 @@
+
+[Unit]
+Before=dnsmasq.service
+
+[Service]
+# Reset the ExecStart values due to systemd quirk
+ExecStart=
+# Manage configuration options in /etc/docker/daemon.json
+ExecStart=/usr/bin/dockerd
+# Ensure traffic to containers is not dropped
+ExecStartPost=/sbin/iptables -P FORWARD ACCEPT
+# iptables -I DOCKER-USER -i ext_if ! -s <%= VM_IP %> -j DROP

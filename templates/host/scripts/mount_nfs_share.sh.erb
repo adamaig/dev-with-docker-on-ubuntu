@@ -1,0 +1,5 @@
+#!/bin/bash
+
+echo '** Mounting ubuntu NFS /home/<%= USERNAME %>/<%= NFS_MOUNT_DIRNAME %> to ~/<%= NFS_MOUNT_DIRNAME %>'
+[[ ! -d <%= ENV.fetch('HOME') %>/<%= NFS_MOUNT_DIRNAME %> ]] && mkdir <%= ENV.fetch('HOME') %>/<%= NFS_MOUNT_DIRNAME %> && touch <%= ENV.fetch('HOME') %>/<%= NFS_MOUNT_DIRNAME %>/.metadata_never_index
+sudo mount -t nfs -o <%= NFS_HOST_MOUNT_OPTS %> <%= VM_IP %>:/home/<%= USERNAME %>/<%= NFS_MOUNT_DIRNAME %> <%= ENV.fetch('HOME') %>/<%= NFS_MOUNT_DIRNAME %>

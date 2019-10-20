@@ -1,0 +1,32 @@
+#!/bin/bash
+
+echo "** Configuring locale and timezone"
+update-locale LANG="en_US.UTF-8" LC_COLLATE="en_US.UTF-8" \
+  LC_CTYPE="en_US.UTF-8" LC_MESSAGES="en_US.UTF-8" \
+  LC_MONETARY="en_US.UTF-8" LC_NUMERIC="en_US.UTF-8" LC_TIME="en_US.UTF-8"
+timedatectl set-timezone <%= TIMEZONE %>
+
+echo "*** Updating apt index"
+apt-get update -y
+apt-get install -y -qq --no-install-recommends \
+  apt-transport-https \
+  ca-certificates \
+  debconf-utils \
+  gnupg-agent \
+  software-properties-common
+
+echo "*** Installing base services: ntp, dnsmasq, nfs-kernel-server, network-manager"
+apt-get install -y -qq ntp network-manager dnsmasq nfs-kernel-server
+
+echo "*** Installing tools: curl, wget, git, vim, sqlite"
+apt-get install -y -qq curl wget git vim sqlite
+
+echo "** Modifying NetworkManager and dnsmasq to support routing to localhost"
+mv dnsmasq_vm.conf /etc/dnsmasq.d/10-base-dns
+
+echo "Reloading systemctl configs and restarting services"
+systemctl daemon-reload
+service ntp restart
+service nfs-kernel-server restart
+service network-manager restart
+service dnsmasq restart

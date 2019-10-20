@@ -1,0 +1,7 @@
+#!/bin/bash
+
+echo "** Cleaning up old packaged with 'apt autoremove' ... "
+apt-get autoremove -y
+
+echo "** Linking /Users -> /home in the guest. Supports volume mounting in docker-compose path expansion over the DOCKER_HOST tcp connection."
+[[ ! -L /Users ]] && ln -s /home /Users
