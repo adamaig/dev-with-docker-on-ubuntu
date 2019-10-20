@@ -228,7 +228,7 @@ Vagrant.configure("2") do |config|
     end
   end
 
-  config.vm.provision "shell", name: "base_setup", inline: <<-SHELL
+  config.vm.provision "base_setup", type: "shell", inline: <<-SHELL
     update-locale LANG="en_US.UTF-8" LC_COLLATE="en_US.UTF-8" \
       LC_CTYPE="en_US.UTF-8" LC_MESSAGES="en_US.UTF-8" \
       LC_MONETARY="en_US.UTF-8" LC_NUMERIC="en_US.UTF-8" LC_TIME="en_US.UTF-8"
@@ -260,7 +260,7 @@ Vagrant.configure("2") do |config|
     service dnsmasq restart
   SHELL
 
-  config.vm.provision "shell", name: "docker_setup", inline: <<-SHELL
+  config.vm.provision "docker_setup", type: "shell", inline: <<-SHELL
     echo "*** Running setup from docker installation"
     # Remove any prior docker versions
     apt-get remove docker docker-engine docker.io
@@ -328,7 +328,7 @@ Vagrant.configure("2") do |config|
   end
 
   # User creation scripts
-  config.vm.provision "shell", name: "create_user", inline: <<-SHELL
+  config.vm.provision "create_user", type: "shell", inline: <<-SHELL
     apt-get install -y $(basename #{SHELL})
     [[ -z "$(getent passwd #{USERNAME})" ]] && adduser --force-badname --uid 9999 --shell=/bin/$(basename #{SHELL}) --disabled-password --gecos "#{USERNAME}" #{USERNAME}
     usermod -G docker,admin,sudo,staff #{USERNAME}
