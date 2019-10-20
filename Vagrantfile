@@ -302,23 +302,12 @@ Vagrant.configure("2") do |config|
     groupadd -f docker
     groupadd -f admin
     usermod -aG admin,docker vagrant
-  SHELL
 
-  config.vm.provision "shell", name: "kube_setup", inline: <<~SHELL
-    snap install microk8s --classic
-  SHELL
+    echo "** Linking /Users -> /home in the guest. Supports volume mounting in docker-compose path expansion over the DOCKER_HOST tcp connection."
+    [[ ! -L /Users ]] && ln -s /home /Users
 
-  [
-    { s: "~#{USERNAME}/.ssh/id_rsa", d: "/tmp/id_rsa" },
-    { s: "~#{USERNAME}/.ssh/id_rsa.pub", d: "/tmp/id_rsa.pub" },
-    { s: "~#{USERNAME}/.ssh/config", d: "/tmp/ssh_config" },
-    { s: "./extras.sh", d: "/tmp/extras.sh" },
-    { s: "./localextras.sh", d: "/tmp/localextras.sh" },
-    { s: "./consul-registrator-setup/consul.json", d: "/tmp/consul.json" },
-    { s: "./consul-registrator-setup/docker-compose.yml", d: "/tmp/docker-compose.yml" }
-  ].each do |x|
-    config.vm.provision "file", source: x[:s], destination: x[:d]
-  end
+    echo "** COMPLETED: Basic docker install."
+  SHELL
 
   # User creation scripts
   config.vm.provision "create_user", type: "shell", inline: <<-SHELL
@@ -326,46 +315,53 @@ Vagrant.configure("2") do |config|
     [[ -z "$(getent passwd #{USERNAME})" ]] && adduser --force-badname --uid 9999 --shell=/bin/$(basename #{SHELL}) --disabled-password --gecos "#{USERNAME}" #{USERNAME}
     usermod -G docker,admin,sudo,staff #{USERNAME}
     echo "#{USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/#{USERNAME}
+  SHELL
 
-    echo "** Setting up ssh keys and hosts"
-    [[ ! -d ~#{USERNAME}/.ssh ]] && mkdir ~#{USERNAME}/.ssh
+  config.vm.provision "copy_user_ssh_files", type: "file", source: "~#{USERNAME}/.ssh", destination: "/tmp/setup_for_#{USERNAME}/"
+  config.vm.provision "copy_consul_example", type: "file", source: "./consul-registrator-setup", destination: "/tmp/setup_for_#{USERNAME}/"
+
+  config.vm.provision "setup_consul_example", type: "shell", inline: <<-SHELL
+    sed -i -e 's/docker\./#{CONSUL_DOMAIN}./' /tmp/setup_for_#{USERNAME}/consul-registrator-setup/consul.json
+  SHELL
+
+  config.vm.provision "setup_user_ssh", type: "shell", inline: <<-SHELL
+    mv /tmp/setup_for_#{USERNAME}/.ssh ~#{USERNAME}/
     chmod 0700 ~#{USERNAME}/.ssh
-    mv /tmp/id_rsa* ~#{USERNAME}/.ssh/
-    mv /tmp/ssh_config ~#{USERNAME}/.ssh/config
 
     echo "** Cleaning up ssh authorized_keys and known_hosts"
-    cat ~#{USERNAME}/.ssh/id_rsa.pub | xargs -I{} echo '^{}$' | xargs -I{} grep -v -e '{}' ~#{USERNAME}/.ssh/authorized_keys > ~#{USERNAME}/.ssh/cleaned_authorized_keys
-    mv ~#{USERNAME}/.ssh/cleaned_authorized_keys ~#{USERNAME}/.ssh/authorized_keys
-    cat ~#{USERNAME}/.ssh/id_rsa.pub >> ~#{USERNAME}/.ssh/authorized_keys
-    chmod 0600 ~#{USERNAME}/.ssh/authorized_keys
-    sudo -u #{USERNAME} -i ssh-keygen -R github.com
-    sudo -u #{USERNAME} -i ssh-keygen -R bitbucket.org
-    ssh-keyscan -H github.com bitbucket.org >> ~#{USERNAME}/.ssh/known_hosts
+    pushd ~#{USERNAME}/.ssh
 
-    mv /tmp/extras.sh /tmp/localextras.sh ~#{USERNAME}/
+    cat id_rsa.pub | xargs -I{} echo '^{}$' | xargs -I{} grep -v -e '{}' authorized_keys > cleaned_authorized_keys
+    mv cleaned_authorized_keys authorized_keys
+    cat id_rsa.pub >> authorized_keys
+    chmod 0600 authorized_keys
+
+    popd
+
+    chown -R #{USERNAME}: ~#{USERNAME}
+  SHELL
+
+  config.vm.provision "setup_nfs_export", type: "shell", inline: <<-SHELL
     [[ ! -d ~#{USERNAME}/#{NFS_MOUNT_DIRNAME} ]] && mkdir ~#{USERNAME}/#{NFS_MOUNT_DIRNAME}
     echo "File from #{VM_NAME}" > ~#{USERNAME}/#{NFS_MOUNT_DIRNAME}/README.txt
-
-    [[ ! -d ~#{USERNAME}/consul-registrator-setup ]] && mkdir ~#{USERNAME}/consul-registrator-setup/
-    mv /tmp/consul.json /tmp/docker-compose.yml ~#{USERNAME}/consul-registrator-setup/
-    sed -i -e 's/docker\./#{CONSUL_DOMAIN}./' ~#{USERNAME}/consul-registrator-setup/consul.json
-
     chown -R #{USERNAME}: ~#{USERNAME}
 
     sed -i "/^\\/home\\/#{USERNAME}\\/#{NFS_MOUNT_DIRNAME} /d" /etc/exports
     echo "/home/#{USERNAME}/#{NFS_MOUNT_DIRNAME} #{VM_GATEWAY_IP}(rw,sync,no_subtree_check,insecure,anonuid=$(id -u #{USERNAME}),anongid=$(id -g #{USERNAME}),all_squash)" >> /etc/exports
     exportfs -a
+  SHELL
 
-    sudo -u #{USERNAME} -i bash extras.sh
+  config.vm.provision "copy_dev_tool_script", type: "file", source: "./devtools.sh", destination: "/tmp/setup_for_#{USERNAME}/"
+  config.vm.provision "setup_development_tools", type: "shell", inline: <<-SHELL
+    sudo -u #{USERNAME} -i bash /tmp/setup_for_#{USERNAME}/devtools.sh
+
+    echo "** COMPLETED: setup_development_tools"
   SHELL
 
   # Cleanup scripts
   config.vm.provision "shell", name: "cleanup", inline: <<-SHELL
     echo "** Cleaning up old packaged with 'apt autoremove' ... "
     apt-get autoremove -y
-
-    echo "** Linking /Users -> /home in the guest. Supports volume mounting in docker-compose path expansion over the DOCKER_HOST tcp connection."
-    [[ ! -L /Users ]] && ln -s /home /Users
 
     echo "** Run 'export DOCKER_HOST="tcp://#{VM_IP}:2375"' on this host to interact with docker in the vagrant guest"
   SHELL
