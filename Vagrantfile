@@ -100,9 +100,7 @@ TIMEZONE = config_options["tz"]
 # environment and dns lookups
 dnsmasq_base_conf = <<EOF
 listen-address=127.0.0.1
-listen-address=#{DOCKER_BRIDGE_IP}
 listen-address=#{VM_IP}
-server=/.service.#{CONSUL_DOMAIN}/127.0.0.1##{CONSUL_DNS_PORT}
 EOF
 
 
