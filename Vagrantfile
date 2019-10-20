@@ -49,9 +49,9 @@ if File.exist?("config.yml")
 end
 
 # Specifies the docker-engine apt package version
-DOCKER_ENGINE_VERSION="5:18.09.5~3-0~ubuntu-xenial"
+DOCKER_ENGINE_VERSION="5:19.03.4~3-0~ubuntu-bionic"
 # Specifies the docker-compose release version
-DOCKER_COMPOSE_VERSION="1.24.0"
+DOCKER_COMPOSE_VERSION="1.24.1"
 
 # Set this to true in order to enable the gui and install necessary packages
 ENABLE_GUI = config_options["enable_gui"]
@@ -242,6 +242,7 @@ Vagrant.configure("2") do |config|
       apt-transport-https \
       ca-certificates \
       debconf-utils \
+      gnupg-agent \
       software-properties-common
 
     echo "*** Installing base services: ntp, dnsmasq, nfs-kernel-server, network-manager"
@@ -264,11 +265,11 @@ Vagrant.configure("2") do |config|
   config.vm.provision "docker_setup", type: "shell", inline: <<-SHELL
     echo "*** Running setup from docker installation"
     # Remove any prior docker versions
-    apt-get remove docker docker-engine docker.io
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-    add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+    apt-get remove docker docker-engine docker.io containerd runc
 
     echo "*** Updating apt index"
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+    add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
     apt-get update -y
 
     echo "*** Installing Docker CE"
@@ -276,18 +277,11 @@ Vagrant.configure("2") do |config|
       docker-ce-cli=#{DOCKER_ENGINE_VERSION} \
       containerd.io
 
-    echo "** Checking if docker-compose installation is #{DOCKER_COMPOSE_VERSION}"
-    if [[ (! -f /usr/local/bin/docker-compose) || (! `docker-compose --version` =~ "#{DOCKER_COMPOSE_VERSION}") ]]
-    then
-      url_base="https://github.com/docker/compose/releases/download/"
-      version="#{DOCKER_COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m`"
-      curl -s -L $url_base$version -o /usr/local/bin/docker-compose
-      chmod +x /usr/local/bin/docker-compose
-    fi
-
-    sed -i "/^GRUB_CMDLINE_LINUX/d" /etc/default/grub
-    echo 'GRUB_CMDLINE_LINUX="cgroup_enable=memory swapaccount=1"' >> /etc/default/grub
-    update-grub
+    echo "*** Installing docker-compose version=#{DOCKER_COMPOSE_VERSION}"
+    url_base="https://github.com/docker/compose/releases/download/"
+    version="#{DOCKER_COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m`"
+    curl -s -L $url_base$version -o /usr/local/bin/docker-compose
+    chmod +x /usr/local/bin/docker-compose
 
     echo "** Modifying NetworkManager and dnsmasq to support routing to service.docker"
     echo "#{dnsmasq_docker_conf}" > /etc/dnsmasq.d/11-docker
