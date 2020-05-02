@@ -49,9 +49,9 @@ if File.exist?("config.yml")
 end
 
 # Specifies the docker-engine apt package version
-DOCKER_ENGINE_VERSION="5:18.09.5~3-0~ubuntu-xenial"
+DOCKER_ENGINE_VERSION="5:19.03.4~3-0~ubuntu-bionic"
 # Specifies the docker-compose release version
-DOCKER_COMPOSE_VERSION="1.24.0"
+DOCKER_COMPOSE_VERSION="1.24.1"
 
 # Set this to true in order to enable the gui and install necessary packages
 ENABLE_GUI = config_options["enable_gui"]
@@ -100,9 +100,7 @@ TIMEZONE = config_options["tz"]
 # environment and dns lookups
 dnsmasq_base_conf = <<EOF
 listen-address=127.0.0.1
-listen-address=#{DOCKER_BRIDGE_IP}
 listen-address=#{VM_IP}
-server=/.service.#{CONSUL_DOMAIN}/127.0.0.1##{CONSUL_DNS_PORT}
 EOF
 
 
@@ -207,7 +205,7 @@ class SetupDockerRouting < Vagrant.plugin("2")
 end
 
 Vagrant.configure("2") do |config|
-  config.vm.box = "bento/ubuntu-16.04"
+  config.vm.box = "bento/ubuntu-18.04"
   config.vm.box_check_update = true
 
   # Make sure you have XQuartz running on the host
@@ -230,28 +228,30 @@ Vagrant.configure("2") do |config|
     end
   end
 
-  config.vm.provision "shell", name: "base_setup", inline: <<-SHELL
+  config.vm.provision "base_setup", type: "shell", inline: <<-SHELL
+    echo "** Configuring locale and timezone"
     update-locale LANG="en_US.UTF-8" LC_COLLATE="en_US.UTF-8" \
       LC_CTYPE="en_US.UTF-8" LC_MESSAGES="en_US.UTF-8" \
       LC_MONETARY="en_US.UTF-8" LC_NUMERIC="en_US.UTF-8" LC_TIME="en_US.UTF-8"
 
-    echo "*** Updating apt index"
-    apt-get update -y
-    apt-get install -y --no-install-recommends \
-      debconf-utils apt-transport-https ca-certificates software-properties-common
-
-    echo "*** Installing base services: ntp, dnsmasq, nfs-kernel-server, network-manager"
-    apt-get install -y ntp network-manager dnsmasq nfs-kernel-server
-
-    echo "*** Installing tools: curl, wget, git, vim, sqlite"
-    apt-get install -y curl wget git vim sqlite
-
-    echo "** Configuring timezone"
     timedatectl set-timezone #{TIMEZONE}
 
-    echo "** Modifying NetworkManager and dnsmasq to support routing to localhost"
-    sed -e 's/.*bind-interfaces/# bind-interfaces/' -i /etc/dnsmasq.d/network-manager
-    sed -e 's/.*dns=dnsmasq/# dns=dnsmasq/' -i /etc/NetworkManager/NetworkManager.conf
+    echo "*** Updating apt index"
+    apt-get update -y
+    apt-get install -y -qq --no-install-recommends \
+      apt-transport-https \
+      ca-certificates \
+      debconf-utils \
+      gnupg-agent \
+      software-properties-common
+
+    echo "*** Installing base services: ntp, dnsmasq, nfs-kernel-server, network-manager"
+    apt-get install -y -qq ntp network-manager dnsmasq nfs-kernel-server
+
+    echo "*** Installing tools: curl, wget, git, vim, sqlite"
+    apt-get install -y -qq curl wget git vim sqlite
+
+    echo "** Add dnsmasq support for routing to localhost"
     echo "#{dnsmasq_base_conf}" > /etc/dnsmasq.d/10-base-dns
 
     echo "Reloading systemclt configs and restarting services"
@@ -262,14 +262,14 @@ Vagrant.configure("2") do |config|
     service dnsmasq restart
   SHELL
 
-  config.vm.provision "shell", name: "docker_setup", inline: <<-SHELL
+  config.vm.provision "docker_setup", type: "shell", inline: <<-SHELL
     echo "*** Running setup from docker installation"
     # Remove any prior docker versions
-    apt-get remove docker docker-engine docker.io
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-    add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+    apt-get remove docker docker-engine docker.io containerd runc
 
     echo "*** Updating apt index"
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+    add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
     apt-get update -y
 
     echo "*** Installing Docker CE"
@@ -277,22 +277,13 @@ Vagrant.configure("2") do |config|
       docker-ce-cli=#{DOCKER_ENGINE_VERSION} \
       containerd.io
 
-    echo "** Checking if docker-compose installation is #{DOCKER_COMPOSE_VERSION}"
-    if [[ (! -f /usr/local/bin/docker-compose) || (! `docker-compose --version` =~ "#{DOCKER_COMPOSE_VERSION}") ]]
-    then
-      url_base="https://github.com/docker/compose/releases/download/"
-      version="#{DOCKER_COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m`"
-      curl -s -L $url_base$version -o /usr/local/bin/docker-compose
-      chmod +x /usr/local/bin/docker-compose
-    fi
-
-    sed -i "/^GRUB_CMDLINE_LINUX/d" /etc/default/grub
-    echo 'GRUB_CMDLINE_LINUX="cgroup_enable=memory swapaccount=1"' >> /etc/default/grub
-    update-grub
+    echo "*** Installing docker-compose version=#{DOCKER_COMPOSE_VERSION}"
+    url_base="https://github.com/docker/compose/releases/download/"
+    version="#{DOCKER_COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m`"
+    curl -s -L $url_base$version -o /usr/local/bin/docker-compose
+    chmod +x /usr/local/bin/docker-compose
 
     echo "** Modifying NetworkManager and dnsmasq to support routing to service.docker"
-    sed -e 's/.*bind-interfaces/# bind-interfaces/' -i /etc/dnsmasq.d/network-manager
-    sed -e 's/.*dns=dnsmasq/# dns=dnsmasq/' -i /etc/NetworkManager/NetworkManager.conf
     echo "#{dnsmasq_docker_conf}" > /etc/dnsmasq.d/11-docker
 
     echo "** Adding /etc/docker/daemon.json configuration"
@@ -311,70 +302,66 @@ Vagrant.configure("2") do |config|
     groupadd -f docker
     groupadd -f admin
     usermod -aG admin,docker vagrant
-  SHELL
 
-  config.vm.provision "shell", name: "kube_setup", inline: <<~SHELL
-    snap install microk8s --classic
-  SHELL
+    echo "** Linking /Users -> /home in the guest. Supports volume mounting in docker-compose path expansion over the DOCKER_HOST tcp connection."
+    [[ ! -L /Users ]] && ln -s /home /Users
 
-  [
-    { s: "~#{USERNAME}/.ssh/id_rsa", d: "/tmp/id_rsa" },
-    { s: "~#{USERNAME}/.ssh/id_rsa.pub", d: "/tmp/id_rsa.pub" },
-    { s: "~#{USERNAME}/.ssh/config", d: "/tmp/ssh_config" },
-    { s: "./extras.sh", d: "/tmp/extras.sh" },
-    { s: "./localextras.sh", d: "/tmp/localextras.sh" },
-    { s: "./consul-registrator-setup/consul.json", d: "/tmp/consul.json" },
-    { s: "./consul-registrator-setup/docker-compose.yml", d: "/tmp/docker-compose.yml" }
-  ].each do |x|
-    config.vm.provision "file", source: x[:s], destination: x[:d]
-  end
+    echo "** COMPLETED: Basic docker install."
+  SHELL
 
   # User creation scripts
-  config.vm.provision "shell", name: "create_user", inline: <<-SHELL
+  config.vm.provision "create_user", type: "shell", inline: <<-SHELL
     apt-get install -y $(basename #{SHELL})
     [[ -z "$(getent passwd #{USERNAME})" ]] && adduser --force-badname --uid 9999 --shell=/bin/$(basename #{SHELL}) --disabled-password --gecos "#{USERNAME}" #{USERNAME}
     usermod -G docker,admin,sudo,staff #{USERNAME}
     echo "#{USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/#{USERNAME}
+  SHELL
 
-    echo "** Setting up ssh keys and hosts"
-    [[ ! -d ~#{USERNAME}/.ssh ]] && mkdir ~#{USERNAME}/.ssh
+  config.vm.provision "copy_user_ssh_files", type: "file", source: "~#{USERNAME}/.ssh", destination: "/tmp/setup_for_#{USERNAME}/"
+  config.vm.provision "copy_consul_example", type: "file", source: "./consul-registrator-setup", destination: "/tmp/setup_for_#{USERNAME}/"
+
+  config.vm.provision "setup_consul_example", type: "shell", inline: <<-SHELL
+    sed -i -e 's/docker\./#{CONSUL_DOMAIN}./' /tmp/setup_for_#{USERNAME}/consul-registrator-setup/consul.json
+  SHELL
+
+  config.vm.provision "setup_user_ssh", type: "shell", inline: <<-SHELL
+    mv /tmp/setup_for_#{USERNAME}/.ssh ~#{USERNAME}/
     chmod 0700 ~#{USERNAME}/.ssh
-    mv /tmp/id_rsa* ~#{USERNAME}/.ssh/
-    mv /tmp/ssh_config ~#{USERNAME}/.ssh/config
 
     echo "** Cleaning up ssh authorized_keys and known_hosts"
-    cat ~#{USERNAME}/.ssh/id_rsa.pub | xargs -I{} echo '^{}$' | xargs -I{} grep -v -e '{}' ~#{USERNAME}/.ssh/authorized_keys > ~#{USERNAME}/.ssh/cleaned_authorized_keys
-    mv ~#{USERNAME}/.ssh/cleaned_authorized_keys ~#{USERNAME}/.ssh/authorized_keys
-    cat ~#{USERNAME}/.ssh/id_rsa.pub >> ~#{USERNAME}/.ssh/authorized_keys
-    chmod 0600 ~#{USERNAME}/.ssh/authorized_keys
-    sudo -u #{USERNAME} -i ssh-keygen -R github.com
-    sudo -u #{USERNAME} -i ssh-keygen -R bitbucket.org
-    ssh-keyscan -H github.com bitbucket.org >> ~#{USERNAME}/.ssh/known_hosts
+    pushd ~#{USERNAME}/.ssh
 
-    mv /tmp/extras.sh /tmp/localextras.sh ~#{USERNAME}/
+    cat id_rsa.pub | xargs -I{} echo '^{}$' | xargs -I{} grep -v -e '{}' authorized_keys > cleaned_authorized_keys
+    mv cleaned_authorized_keys authorized_keys
+    cat id_rsa.pub >> authorized_keys
+    chmod 0600 authorized_keys
+
+    popd
+
+    chown -R #{USERNAME}: ~#{USERNAME}
+  SHELL
+
+  config.vm.provision "setup_nfs_export", type: "shell", inline: <<-SHELL
     [[ ! -d ~#{USERNAME}/#{NFS_MOUNT_DIRNAME} ]] && mkdir ~#{USERNAME}/#{NFS_MOUNT_DIRNAME}
     echo "File from #{VM_NAME}" > ~#{USERNAME}/#{NFS_MOUNT_DIRNAME}/README.txt
-
-    [[ ! -d ~#{USERNAME}/consul-registrator-setup ]] && mkdir ~#{USERNAME}/consul-registrator-setup/
-    mv /tmp/consul.json /tmp/docker-compose.yml ~#{USERNAME}/consul-registrator-setup/
-    sed -i -e 's/docker\./#{CONSUL_DOMAIN}./' ~#{USERNAME}/consul-registrator-setup/consul.json
-
     chown -R #{USERNAME}: ~#{USERNAME}
 
     sed -i "/^\\/home\\/#{USERNAME}\\/#{NFS_MOUNT_DIRNAME} /d" /etc/exports
     echo "/home/#{USERNAME}/#{NFS_MOUNT_DIRNAME} #{VM_GATEWAY_IP}(rw,sync,no_subtree_check,insecure,anonuid=$(id -u #{USERNAME}),anongid=$(id -g #{USERNAME}),all_squash)" >> /etc/exports
     exportfs -a
+  SHELL
 
-    sudo -u #{USERNAME} -i bash extras.sh
+  config.vm.provision "copy_dev_tool_script", type: "file", source: "./devtools.sh", destination: "/tmp/setup_for_#{USERNAME}/"
+  config.vm.provision "setup_development_tools", type: "shell", inline: <<-SHELL
+    sudo -u #{USERNAME} -i bash /tmp/setup_for_#{USERNAME}/devtools.sh
+
+    echo "** COMPLETED: setup_development_tools"
   SHELL
 
   # Cleanup scripts
   config.vm.provision "shell", name: "cleanup", inline: <<-SHELL
     echo "** Cleaning up old packaged with 'apt autoremove' ... "
     apt-get autoremove -y
-
-    echo "** Linking /Users -> /home in the guest. Supports volume mounting in docker-compose path expansion over the DOCKER_HOST tcp connection."
-    [[ ! -L /Users ]] && ln -s /home /Users
 
     echo "** Run 'export DOCKER_HOST="tcp://#{VM_IP}:2375"' on this host to interact with docker in the vagrant guest"
   SHELL
