@@ -39,19 +39,19 @@ class Hash
     end
   end
 end
+
 # Read option file if it exists
 if File.exist?("config.yml")
   config_yaml = YAML.load(ERB.new(File.read("config.yml")).result)
-  #config_options.merge!()
   config_options = config_options.options_merge(config_yaml)
   puts "** Running with options:"
   pp config_options
 end
 
 # Specifies the docker-engine apt package version
-DOCKER_ENGINE_VERSION="5:19.03.4~3-0~ubuntu-bionic"
+DOCKER_ENGINE_VERSION="5:19.03.8~3-0~ubuntu-bionic"
 # Specifies the docker-compose release version
-DOCKER_COMPOSE_VERSION="1.24.1"
+DOCKER_COMPOSE_VERSION="1.25.5"
 
 # Set this to true in order to enable the gui and install necessary packages
 ENABLE_GUI = config_options["enable_gui"]
@@ -211,6 +211,9 @@ Vagrant.configure("2") do |config|
   # Make sure you have XQuartz running on the host
   config.ssh.forward_x11 = true
 
+  # set the hostname to the name of the vm
+  config.vm.hostname = VM_NAME
+
   # Create a private network, which allows host-only access to the machine
   # using a specific IP.
   config.vm.network "private_network", ip: VM_IP
@@ -219,8 +222,9 @@ Vagrant.configure("2") do |config|
     vb.name = VM_NAME
     vb.memory = config_options["vm"]["memory"]
     vb.cpus = config_options["vm"]["cpus"]
+
     if ENABLE_GUI
-      vb.gui = ENABLE_GUI
+      vb.gui = true
       vb.customize ["modifyvm", :id, "--vram", config_options["vm"]["vram"]]
       vb.customize ["modifyvm", :id, "--accelerate3d", config_options["vm"]["accelerate_3d"]]
       vb.customize ["modifyvm", :id, "--clipboard", config_options["vm"]["clipboard"]]
@@ -352,6 +356,7 @@ Vagrant.configure("2") do |config|
   SHELL
 
   config.vm.provision "copy_dev_tool_script", type: "file", source: "./devtools.sh", destination: "/tmp/setup_for_#{USERNAME}/"
+
   config.vm.provision "setup_development_tools", type: "shell", inline: <<-SHELL
     sudo -u #{USERNAME} -i bash /tmp/setup_for_#{USERNAME}/devtools.sh
 
