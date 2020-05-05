@@ -1,6 +1,6 @@
 # http://consul.service.docker:8500
 consul:
-  image: consul:v0.6.4
+  image: consul:1.7
   container_name: consul
   hostname: consul
   command: "agent"
@@ -15,7 +15,7 @@ consul:
 
 # http://gliderlabs.com/registrator/latest/user/run/
 registrator:
-  image: gliderlabs/registrator:v7
+  image: gliderlabs/registrator:latest
   container_name: registrator
   hostname: registrator
   command: "-internal -cleanup=true -retry-attempts -1 -resync 2 -ttl 10 -ttl-refresh 2 consul://consul:8500"
