@@ -26,7 +26,16 @@ config_options = {
     "mount_on_up" => true,
     "directory_name" => "vagrant_projects",
     "host_mount_options" => "rw,bg,hard,nolocks,intr,sync"
-  }
+  },
+  "synced_folders" => [
+    {
+      "host_path" => File.join(ENV["HOME"], "Code"),
+      "guest_path" => File.join("/home", ENV.fetch("USER"), "Code"),
+      "opts" => {
+        owner: ENV["USER"]
+      }
+    }
+  ]
 }
 class Hash
   def options_merge(other)
@@ -215,10 +224,24 @@ Vagrant.configure("2") do |config|
   # using a specific IP.
   config.vm.network "private_network", ip: VM_IP
 
+  # allow syncing files directly between host and guest
+  # Alternate to using NFS and protects against loss of files if the vm disk or machine
+  # is deleted
+  config_options["synced_folders"].each do |c|
+    opts = c["opts"].keys.reduce({}) {|m,k| m.merge(k.to_sym => c["opts"][k]) }
+    puts "sync dir opts: #{opts}"
+    config.vm.synced_folder c["host_path"], c["guest_path"], **opts
+  end
+
+  # Disable default Vagrant folder, use a unique path per project
+  config.vm.synced_folder ".", "/home/vagrant", disabled: true
+
   config.vm.provider "virtualbox" do |vb|
+    # name machine in provider
     vb.name = VM_NAME
     vb.memory = config_options["vm"]["memory"]
     vb.cpus = config_options["vm"]["cpus"]
+
     if ENABLE_GUI
       vb.gui = ENABLE_GUI
       vb.customize ["modifyvm", :id, "--vram", config_options["vm"]["vram"]]
@@ -352,6 +375,7 @@ Vagrant.configure("2") do |config|
   SHELL
 
   config.vm.provision "copy_dev_tool_script", type: "file", source: "./devtools.sh", destination: "/tmp/setup_for_#{USERNAME}/"
+
   config.vm.provision "setup_development_tools", type: "shell", inline: <<-SHELL
     sudo -u #{USERNAME} -i bash /tmp/setup_for_#{USERNAME}/devtools.sh
 
