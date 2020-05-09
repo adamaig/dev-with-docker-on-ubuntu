@@ -112,6 +112,7 @@ EOF
 # The systemd dropin config for the docker service
 docker_drop_in_conf = <<EOF
 [Unit]
+# Ensure the docker bridge is up before starting dnsmasq
 Before=dnsmasq.service
 
 [Service]
@@ -121,7 +122,6 @@ ExecStart=
 ExecStart=/usr/bin/dockerd
 # Ensure traffic to containers is not dropped
 ExecStartPost=/sbin/iptables -P FORWARD ACCEPT
-# iptables -I DOCKER-USER -i ext_if ! -s #{VM_IP} -j DROP
 EOF
 
 docker_daemon_json = <<EOF
