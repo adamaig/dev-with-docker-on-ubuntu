@@ -266,7 +266,7 @@ Vagrant.configure("2") do |config|
     service dnsmasq restart
   SHELL
 
-  config.vm.provision "docker_setup", type: "shell", inline: <<-SHELL
+  config.vm.provision "install_docker", type: "shell", inline: <<-SHELL
     echo "*** Running setup from docker installation"
     # Remove any prior docker versions
     apt-get remove docker docker-engine docker.io containerd runc
@@ -287,6 +287,12 @@ Vagrant.configure("2") do |config|
     curl -s -L $url_base$version -o /usr/local/bin/docker-compose
     chmod +x /usr/local/bin/docker-compose
 
+    echo "creating admin and docker groups"
+    groupadd -f docker
+    groupadd -f admin
+  SHELL
+
+  config.vm.provision "docker_customization", type: "shell", inline: <<-SHELL
     echo "** Modifying NetworkManager and dnsmasq to support routing to service.docker"
     echo "#{dnsmasq_docker_conf}" > /etc/dnsmasq.d/11-docker
 
@@ -302,9 +308,7 @@ Vagrant.configure("2") do |config|
     service dnsmasq restart
     service docker restart
 
-    echo "creating admin and docker groups, adding vagrant user"
-    groupadd -f docker
-    groupadd -f admin
+    echo "Add vagrant user to docker group"
     usermod -aG admin,docker vagrant
 
     echo "** Linking /Users -> /home in the guest. Supports volume mounting in docker-compose path expansion over the DOCKER_HOST tcp connection."
