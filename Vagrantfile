@@ -28,6 +28,7 @@ config_options = {
     "host_mount_options" => "rw,bg,hard,nolocks,intr,sync"
   }
 }
+
 class Hash
   def options_merge(other)
     self.merge(other) do |key, self_v, other_v|
@@ -371,8 +372,6 @@ Vagrant.configure("2") do |config|
   config.vm.provision "shell", name: "cleanup", inline: <<-SHELL
     echo "** Cleaning up old packaged with 'apt autoremove' ... "
     apt-get autoremove -y
-
-    echo "** Run 'export DOCKER_HOST="tcp://#{VM_IP}:2375"' on this host to interact with docker in the vagrant guest"
   SHELL
 
   if ENABLE_GUI
@@ -381,5 +380,11 @@ Vagrant.configure("2") do |config|
       mv /tmp/enable_gui.sh ~#{USERNAME}/
       sudo -u #{USERNAME} -i bash enable_gui.sh
     SHELL
+  end
+
+  config.trigger.after [:up] do |t|
+    t.name = "Docker Usage"
+    t.info = "** Run 'export DOCKER_HOST=\"tcp://#{VM_IP}:2375\"' on host to interact with docker in the vagrant guest.\n" +
+             "** See https://docs.docker.com/engine/reference/commandline/cli/#environment-variables"
   end
 end
