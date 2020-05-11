@@ -104,7 +104,6 @@ listen-address=127.0.0.1
 listen-address=#{VM_IP}
 EOF
 
-
 dnsmasq_docker_conf = <<EOF
 listen-address=#{DOCKER_BRIDGE_IP}
 server=/.service.#{CONSUL_DOMAIN}/127.0.0.1##{CONSUL_DNS_PORT}
@@ -253,8 +252,8 @@ Vagrant.configure("2") do |config|
     echo "*** Installing base services: ntp, dnsmasq, nfs-kernel-server, network-manager"
     apt-get install -y -qq ntp network-manager dnsmasq nfs-kernel-server
 
-    echo "*** Installing tools: curl, wget, git, vim, sqlite"
-    apt-get install -y -qq curl wget git vim sqlite
+    echo "*** Installing tools: curl, wget, tar, build-essential, git, vim, sqlite"
+    apt-get install -y -qq curl wget tar build-essential git vim sqlite
 
     echo "** Add dnsmasq support for routing to localhost"
     echo "#{dnsmasq_base_conf}" > /etc/dnsmasq.d/10-base-dns
@@ -326,15 +325,19 @@ Vagrant.configure("2") do |config|
     echo "#{USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/#{USERNAME}
   SHELL
 
-  config.vm.provision "copy_user_ssh_files", type: "file", source: "~#{USERNAME}/.ssh", destination: "/tmp/setup_for_#{USERNAME}/"
-  config.vm.provision "copy_consul_example", type: "file", source: "./consul-registrator-setup", destination: "/tmp/setup_for_#{USERNAME}/"
-
-  config.vm.provision "setup_consul_example", type: "shell", inline: <<-SHELL
-    sed -i -e 's/docker\./#{CONSUL_DOMAIN}./' /tmp/setup_for_#{USERNAME}/consul-registrator-setup/consul.json
+  USER_SETUP_TMP_DIR = "/tmp/user_setup"
+  config.vm.provision "copy_user_ssh_files", type: "file", source: "~#{USERNAME}/.ssh", destination: "#{USER_SETUP_TMP_DIR}/.ssh"
+  config.vm.provision "copy_consul_example", type: "file", source: "./consul-registrator-setup", destination: "#{USER_SETUP_TMP_DIR}/consul-registrator-setup"
+  config.vm.provision "cp_dev_tool_script", type: "file", source: "./devtools.sh", destination: "#{USER_SETUP_TMP_DIR}/"
+  if File.exist?("./devtools-personal.sh")
+    config.vm.provision "cp_personal_dev_tool_script", type: "file", source: "./devtools-personal.sh", destination: "#{USER_SETUP_TMP_DIR}/"
+  end
+  config.vm.provision "mv_setup_files_to_user_dir", type: "shell", inline: <<-SHELL
+    sudo cp -r #{USER_SETUP_TMP_DIR}/.ssh #{USER_SETUP_TMP_DIR}/* ~#{USERNAME}/
+    sudo chown -R #{USERNAME}: ~#{USERNAME}
   SHELL
 
   config.vm.provision "setup_user_ssh", type: "shell", inline: <<-SHELL
-    mv /tmp/setup_for_#{USERNAME}/.ssh ~#{USERNAME}/
     chmod 0700 ~#{USERNAME}/.ssh
 
     echo "** Cleaning up ssh authorized_keys and known_hosts"
@@ -345,9 +348,14 @@ Vagrant.configure("2") do |config|
     cat id_rsa.pub >> authorized_keys
     chmod 0600 authorized_keys
 
-    popd
-
     chown -R #{USERNAME}: ~#{USERNAME}
+  SHELL
+
+  config.vm.provision "exec_devtools_script", type: "shell",
+    inline: "sudo -u #{USERNAME} -i bash ~#{USERNAME}/devtools.sh"
+
+  config.vm.provision "setup_consul_example", type: "shell", inline: <<-SHELL
+    sed -i -e 's/docker\./#{CONSUL_DOMAIN}./' ~#{USERNAME}/consul-registrator-setup/consul.json
   SHELL
 
   config.vm.provision "setup_nfs_export", type: "shell", inline: <<-SHELL
@@ -358,14 +366,6 @@ Vagrant.configure("2") do |config|
     sed -i "/^\\/home\\/#{USERNAME}\\/#{NFS_MOUNT_DIRNAME} /d" /etc/exports
     echo "/home/#{USERNAME}/#{NFS_MOUNT_DIRNAME} #{VM_GATEWAY_IP}(rw,sync,no_subtree_check,insecure,anonuid=$(id -u #{USERNAME}),anongid=$(id -g #{USERNAME}),all_squash)" >> /etc/exports
     exportfs -a
-  SHELL
-
-  config.vm.provision "copy_dev_tool_script", type: "file", source: "./devtools.sh", destination: "/tmp/setup_for_#{USERNAME}/"
-
-  config.vm.provision "setup_development_tools", type: "shell", inline: <<-SHELL
-    sudo -u #{USERNAME} -i bash /tmp/setup_for_#{USERNAME}/devtools.sh
-
-    echo "** COMPLETED: setup_development_tools"
   SHELL
 
   # Cleanup scripts
