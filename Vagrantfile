@@ -20,7 +20,8 @@ config_options = {
     "draganddrop" => "hosttoguest"
   },
   "tz" => "UTC",
-  "docker" => {"bridge_ip" => "172.17.0.1", "subnet_ip" => "172.17.0.0", "subnet_mask" => 16},
+  "docker_bridge" => {"ip" => "172.17.0.1", "mask" => 16},
+  "docker_subnet" => {"ip" => "172.16.0.0", "mask" => 12},
   "consul" => {"dns_port" => 8600, "domain" => "docker"},
   "nfs" => {
     "mount_on_up" => true,
@@ -67,15 +68,15 @@ VM_IP = config_options["vm"]["ip"]
 # in the vboxnet
 VM_GATEWAY_IP = config_options["vm"]["gateway_ip"]
 
-# Used to config_optionsure the docker-engine bridge network and OSX routes
-DOCKER_BRIDGE_IP = config_options["docker"]["bridge_ip"]
-DOCKER_SUBNET_IP = config_options["docker"]["subnet_ip"]
-DOCKER_SUBNET_MASK = config_options["docker"]["subnet_mask"]
+# Used to specify subet used by the docker engine bridge network
+DOCKER_BRIDGE_IP = config_options["docker_bridge"]["ip"]
+DOCKER_BRIDGE_MASK = config_options["docker_bridge"]["mask"]
+DOCKER_BRIDGE_CIDR = "#{DOCKER_BRIDGE_IP}/#{DOCKER_BRIDGE_MASK}"
 
 # Specifies the OSX route to the docker subnet
+DOCKER_SUBNET_IP = config_options["docker_subnet"]["ip"]
+DOCKER_SUBNET_MASK = config_options["docker_subnet"]["mask"]
 DOCKER_SUBNET_CIDR = "#{DOCKER_SUBNET_IP}/#{DOCKER_SUBNET_MASK}"
-# Used to specify subet used by the docker engine bridge network
-DOCKER_BRIDGE_CIDR = "#{DOCKER_BRIDGE_IP}/#{DOCKER_SUBNET_MASK}"
 
 # This value should match the port that maps to consul 8600 in the docker-compose
 CONSUL_DNS_PORT = config_options["consul"]["dns_port"]
