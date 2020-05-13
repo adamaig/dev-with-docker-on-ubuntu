@@ -101,12 +101,16 @@ TIMEZONE = config_options["tz"]
 # These HEREDOCs are additional config files used to setup the docker development
 # environment and dns lookups
 dnsmasq_base_conf = <<EOF
-listen-address=127.0.0.1
+# Add listener for systemd-resolved
+listen-address=127.0.0.2
+# add listener for configured ip
 listen-address=#{VM_IP}
 EOF
 
 dnsmasq_docker_conf = <<EOF
+# add listener for docker daemon bridge
 listen-address=#{DOCKER_BRIDGE_IP}
+# point DNS resolution for domain to consul
 server=/.service.#{CONSUL_DOMAIN}/127.0.0.1##{CONSUL_DNS_PORT}
 EOF
 
@@ -130,6 +134,11 @@ docker_daemon_json = <<EOF
   "hosts": ["fd://", "tcp://0.0.0.0:2375"],
   "bip": "#{DOCKER_BRIDGE_CIDR}"
 }
+EOF
+
+systemd_resolved_dnsmasq_conf = <<EOF
+[Resolve]
+DNS=127.0.0.2
 EOF
 
 # This script is emitted to allow easy reinstantiation of the OSX routes to the
@@ -206,7 +215,8 @@ class SetupDockerRouting < Vagrant.plugin("2")
 end
 
 Vagrant.configure("2") do |config|
-  config.vm.box = "bento/ubuntu-18.04"
+  # config.vm.box = "bento/ubuntu-18.04"
+  config.vm.box = "generic/ubuntu1804"
   config.vm.box_check_update = true
 
   # Make sure you have XQuartz running on the host
@@ -218,6 +228,8 @@ Vagrant.configure("2") do |config|
   # Create a private network, which allows host-only access to the machine
   # using a specific IP.
   config.vm.network "private_network", ip: VM_IP
+
+  config.vm.synced_folder ".", "/vagrant"
 
   config.vm.provider "virtualbox" do |vb|
     vb.name = VM_NAME
@@ -250,19 +262,38 @@ Vagrant.configure("2") do |config|
       gnupg-agent \
       software-properties-common
 
-    echo "*** Installing base services: ntp, dnsmasq, nfs-kernel-server, network-manager"
-    apt-get install -y -qq ntp network-manager dnsmasq nfs-kernel-server
+    echo "*** Installing base services: ntp"
+    apt-get install -y -qq ntp
 
     echo "*** Installing tools: curl, wget, tar, build-essential, git, vim, sqlite"
     apt-get install -y -qq curl wget tar build-essential git vim sqlite
 
-    echo "** Add dnsmasq support for routing to localhost"
-    echo "#{dnsmasq_base_conf}" > /etc/dnsmasq.d/10-base-dns
-
     echo "Reloading systemclt configs and restarting services"
     systemctl daemon-reload
     service ntp restart
-    service nfs-kernel-server restart
+  SHELL
+
+  config.vm.provision "configure_dns_services", type: "shell", inline: <<-SHELL
+    echo "*** Installing base services: dnsmasq, network-manager"
+    apt-get install -y -qq network-manager dnsmasq
+
+    echo "*** Reconfigure systemd-resolved, NetworkManager, and dnsmasq to work together"
+    echo "*** Add dnsmasq to systemd-resolved DNS servers"
+    mkdir /etc/systemd/resolved.conf.d
+    echo "#{systemd_resolved_dnsmasq_conf}" > /etc/systemd/resolved.conf.d/dnsmasq.conf
+
+    echo "*** Replace the stub-resolv.conf with the managed resolv.conf"
+    rm /etc/resolv.conf
+    ln -s /run/systemd/resolve/resolv.conf /etc/resolv.conf
+
+    echo "*** Disable default settings in systemd-resolved conf"
+    sed -i -e '/Resolve/,$ s/^[#]*\\(.*\\=\\)/#\\1/' /etc/systemd/resolved.conf
+
+    echo "*** Add dnsmasq support for routing to localhost"
+    echo "#{dnsmasq_base_conf}" > /etc/dnsmasq.d/10-base-dns
+
+    systemctl daemon-reload
+    service systemd-resolved restart
     service network-manager restart
     service dnsmasq restart
   SHELL
@@ -304,7 +335,7 @@ Vagrant.configure("2") do |config|
     [ ! -d /etc/systemd/system/docker.service.d ] && mkdir /etc/systemd/system/docker.service.d
     echo "#{docker_drop_in_conf}" > /etc/systemd/system/docker.service.d/dev-on-docker.conf
 
-    echo "Reloading systemclt configs and restarting services"
+    echo "Reloading systemctl configs and restarting services"
     systemctl daemon-reload
     service dnsmasq restart
     service docker restart
@@ -314,8 +345,7 @@ Vagrant.configure("2") do |config|
 
     echo "** Linking /Users -> /home in the guest. Supports volume mounting in docker-compose path expansion over the DOCKER_HOST tcp connection."
     [[ ! -L /Users ]] && ln -s /home /Users
-
-    echo "** COMPLETED: Basic docker install."
+    echo "*** completed docker_customization script"
   SHELL
 
   # User creation scripts
@@ -360,6 +390,10 @@ Vagrant.configure("2") do |config|
   SHELL
 
   config.vm.provision "setup_nfs_export", type: "shell", inline: <<-SHELL
+    echo "*** Installing nfs-kernel-server"
+    apt-get install -y -qq nfs-kernel-server
+    service nfs-kernel-server restart
+
     [[ ! -d ~#{USERNAME}/#{NFS_MOUNT_DIRNAME} ]] && mkdir ~#{USERNAME}/#{NFS_MOUNT_DIRNAME}
     echo "File from #{VM_NAME}" > ~#{USERNAME}/#{NFS_MOUNT_DIRNAME}/README.txt
     chown -R #{USERNAME}: ~#{USERNAME}
