@@ -13,3 +13,7 @@ Source: https://superuser.com/a/1177211 (retrieved 2020-05-06)
 > Traditional Unix command-line tools that aren’t specific to DNS, such as ping(8), probably call the traditional gethostbyname(3) APIs, which, on macOS, make use of the system’s DNS resolver behaviors.
 >
 > To see what your DHCP server told your Mac to use, look at the domain_name_server line in the output of: ipconfig getpacket en0
+
+In order to clear the OSX dns cache
+
+> sudo killall -HUP mDNSResponder;sudo killall mDNSResponderHelper;sudo dscacheutil -flushcache
