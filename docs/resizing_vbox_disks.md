@@ -6,6 +6,8 @@ VM must be off in order for this process to execute.
 
 In this example a new 60GB disk will be created.
 
+NOTE: The disk name and storagectl values may differ depending on the box in use.
+
 1. Start downloading the gparted live cd. The version specified is current as of 2017-05,
    and the correct variant of the live CD for a 64bit MacBook Pro.
 
@@ -84,7 +86,8 @@ In this example a new 60GB disk will be created.
    in the parent partition.
 
 8. Close the GParted application, then open the terminal (do not reboot) and
-   run the following commands. Note the double dash in 'vagrant--vg-root'.
+   run the following commands IF the disk is setup with LVM. Note the double
+   dash in 'vagrant--vg-root'.
 
    ```shell
    sudo pvresize /dev/sda5
@@ -94,6 +97,7 @@ In this example a new 60GB disk will be created.
    ```
 
 9. Shutdown the machine.
+
 10. If the disk isn't automatically ejected, Eject the ISO in the optical drive:
 
     ```shell
