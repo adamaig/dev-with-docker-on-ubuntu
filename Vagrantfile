@@ -353,7 +353,8 @@ Vagrant.configure("2") do |config|
     apt-get install -y $(basename #{SHELL})
     [[ -z "$(getent passwd #{USERNAME})" ]] && adduser --force-badname --uid 9999 --shell=/bin/$(basename #{SHELL}) --disabled-password --gecos "#{USERNAME}" #{USERNAME}
     usermod -G docker,admin,sudo,staff #{USERNAME}
-    echo "#{USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/#{USERNAME}
+    # File is named dev_w_docker_user due to sudoers processing rules excluding some characters
+    echo "#{USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/dev_w_docker_user
   SHELL
 
   USER_SETUP_TMP_DIR = "/tmp/user_setup"
