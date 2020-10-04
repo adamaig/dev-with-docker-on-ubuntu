@@ -1,5 +1,7 @@
+# frozen_string_literal: true
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
+
 require 'yaml'
 require 'erb'
 require 'pp'
@@ -170,52 +172,7 @@ EOF
 File.open("./setup_routes", "w", 0700) { |f| f.puts osx_routes } unless File.exist?("./setup_routes")
 File.open("./mount_nfs_share", "w", 0700) { |f| f.puts mount_nfs } unless File.exist?("./mount_nfs_share")
 
-require "open3"
-class SetupDockerRouting < Vagrant.plugin("2")
-  name "setup_docker_routing"
-
-  class Action
-    def initialize(app, env)
-      @app = app
-    end
-
-    def call(env)
-      @app.call(env)
-
-      if NFS_MOUNT_ON_UP
-        syscall("** Mouting NFS share", <<-EOF
-            ./mount_nfs_share
-          EOF
-        )
-      end
-      syscall("** Setting up routing to .#{CONSUL_DOMAIN} domain", <<-EOF
-          ./setup_routes
-        EOF
-      )
-    end
-
-    def syscall(log, cmd)
-      print "#{log} ... "
-      status = nil
-      Open3.popen2e(cmd) do |input, output, thr|
-        output.each { |line| puts line }
-        status = thr.value
-      end
-      if status.success?
-        puts "done"
-      else
-        exit(1)
-      end
-    end
-  end
-
-  action_hook(:setup_docker_routing, :machine_action_up) do |hook|
-    hook.prepend(SetupDockerRouting::Action)
-  end
-end
-
 Vagrant.configure("2") do |config|
-  # config.vm.box = "bento/ubuntu-18.04"
   config.vm.box = "generic/ubuntu1804"
   config.vm.box_check_update = true
 
@@ -422,5 +379,17 @@ Vagrant.configure("2") do |config|
     t.name = "Docker Usage"
     t.info = "** Run 'export DOCKER_HOST=\"tcp://#{VM_IP}:2375\"' on host to interact with docker in the vagrant guest.\n" +
              "** See https://docs.docker.com/engine/reference/commandline/cli/#environment-variables"
+  end
+
+  config.trigger.after [:up] do |t|
+    t.name = "Host2Guest Routing"
+    t.info = "** Setting up routing to .#{CONSUL_DOMAIN} domain"
+    t.run = { path: "./setup_routes" }
+  end
+
+  config.trigger.after [:up] do |t|
+    t.name = "Guest2Host NFS Export & mount"
+    t.info = "** Mouting NFS share"
+    t.run = { path: "./mount_nfs_share" }
   end
 end
