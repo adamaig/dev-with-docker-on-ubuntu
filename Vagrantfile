@@ -8,7 +8,10 @@ require 'pp'
 
 # Default configuration options
 config_options = {
-  "user" => {"username" => ENV.fetch('USER'), "shell" => ENV.fetch('SHELL')},
+  "user" => {
+    "username" => ENV.fetch('USER'),
+    "shell" => ENV.fetch('SHELL')
+  },
   "enable_gui" => false,
   "vm" => {
     "name" => "dev-on-ub",
@@ -29,7 +32,8 @@ config_options = {
     "mount_on_up" => true,
     "directory_name" => "vagrant_projects",
     "host_mount_options" => "rw,bg,hard,nolocks,intr,sync"
-  }
+  },
+  "local_backup" => "~/vagrant_project.bkup"
 }
 
 class Hash
@@ -91,6 +95,8 @@ NFS_MOUNT_ON_UP = config_options["nfs"]["mount_on_up"]
 NFS_MOUNT_DIRNAME = config_options["nfs"]["directory_name"]
 # NFS client/host mount options
 NFS_HOST_MOUNT_OPTS = config_options["nfs"]["host_mount_options"]
+# Directory for caching work NFS export to the host for safety
+LOCAL_NFS_SYNC_DIR = config_options["local_backup"]
 
 # This var will be used to configure the user created in the vagrant, and
 # should match the user running the vagrant box
@@ -391,5 +397,21 @@ Vagrant.configure("2") do |config|
     t.name = "Guest2Host NFS Export & mount"
     t.info = "** Mouting NFS share"
     t.run = { path: "./mount_nfs_share" }
+  end
+
+  config.trigger.after [:up] do |t|
+    t.name = "Host2Guest Diff Check"
+    t.info = "** Starting diff check for local backup and guest.\n"
+    t.run = {
+      inline: "rsync -nav #{VM_IP}:#{NFS_MOUNT_DIRNAME}/ #{File.expand_path(LOCAL_NFS_SYNC_DIR)}"
+    }
+  end
+
+  config.trigger.before [:halt] do |t|
+    t.name = "Guest2Host Sync"
+    t.info = "** Starting synchronization from GUEST to HOST.\n"
+    t.run = {
+      inline: "rsync -av --delete #{VM_IP}:#{NFS_MOUNT_DIRNAME}/ #{File.expand_path(LOCAL_NFS_SYNC_DIR)}"
+    }
   end
 end

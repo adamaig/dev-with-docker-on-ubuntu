@@ -25,3 +25,4 @@ nfs:
   mount_on_up: true                    # Enable/disable mounting NFS share on guest up: true, false
   directory_name: vagrant_projects     # Specifies name of directory for mount and share
   host_mount_options: "rw,bg,hard,nolocks,intr,sync"  # Specifies mount options for the NFS client
+local_backup: ~/vagrant_project_bkup   # Specifies the target for rsync backups of files
