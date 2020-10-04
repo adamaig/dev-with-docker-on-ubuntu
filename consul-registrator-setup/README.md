@@ -5,7 +5,7 @@ for any containers running under the same docker daemon.
 
 ## Docker-Dompose Service Example
 
-```
+```yaml
 db:
   container_name: project_db
   hostname: project_db_host
@@ -28,9 +28,12 @@ copied (with minor edits) from the site and replicated here for convenience.
 
 Now as you start containers, if they provide any services, they'll be added
 to Consul. We'll run Redis now from the standard library image:
-```
+
+```bash
 $ docker run -d -P --name=redis redis
+...
 ```
+
 Notice we used `-P` to publish all ports. This is not often used except with
 Registrator. Not only does it publish all exposed ports the container has, but
 it assigns them to a random port on the host. Since the point of Registrator
@@ -38,20 +41,23 @@ and Consul is to provide service discovery, the port doesn't matter. Though
 there can still be cases where you still want to manually specify the port.
 
 Let's look at Consul's services endpoint again:
-```
+
+```bash
 $ curl consul.service.docker:8500/v1/catalog/services
 {"consul":[],"redis":[]}
 ```
+
 Consul now has a service called redis. We can see more about the service
 including what port was published by looking at the service endpoint for redis:
-```
+
+```bash
 $ curl $(boot2docker ip):8500/v1/catalog/service/redis
 [{"Node":"boot2docker","Address":"10.0.2.15","ServiceID":"boot2docker:redis:6379","ServiceName":"redis","ServiceTags":null,"ServiceAddress":"","ServicePort":32768}]
 ```
 
 ### Service Object Details and Configuration Options
 
-Retrieved from https://raw.githubusercontent.com/gliderlabs/registrator/master/docs/user/services.md 2020-05-06
+Retrieved from [https://raw.githubusercontent.com/gliderlabs/registrator/master/docs/user/services.md](https://raw.githubusercontent.com/gliderlabs/registrator/master/docs/user/services.md) 2020-05-06
 
 Registrator is primarily concerned with services that would be added to a
 service discovery registry. In our case, a service is anything listening on a
@@ -62,14 +68,16 @@ metadata on the container, into an intermediary service object. This service
 object is then passed to a registry backend to try and place as much of this
 object into a particular registry.
 
-    type Service struct {
-      ID    string               // unique service instance ID
-      Name  string               // service name
-      IP    string               // IP address service is located at
-      Port  int                  // port service is listening on
-      Tags  []string             // extra tags to classify service
-      Attrs map[string]string    // extra attribute metadata
-    }
+```go
+type Service struct {
+  ID    string               // unique service instance ID
+  Name  string               // service name
+  IP    string               // IP address service is located at
+  Port  int                  // port service is listening on
+  Tags  []string             // extra tags to classify service
+  Attrs map[string]string    // extra attribute metadata
+}
+```
 
 #### Container Overrides
 
@@ -113,7 +121,9 @@ If you need to ignore individual service on some container, you can use
 Service names are what you use in service discovery lookups. By default, the
 service name is determined by this pattern:
 
-    <base(container-image)>[-<exposed-port> if >1 ports]
+```text
+<base(container-image)>[-<exposed-port> if >1 ports]
+```
 
 Using the base of the container image, if the image is `gliderlabs/foobar`, the
 service name is `foobar`. If the image is `redis` the service name is simply
@@ -161,7 +171,9 @@ most part, it's an implementation detail, as users typically use service names,
 not their IDs. Registrator comes up with a human-friendly string that encodes
 useful information in the ID based on this pattern:
 
-    <hostname>:<container-name>:<exposed-port>[:udp if udp]
+```text
+<hostname>:<container-name>:<exposed-port>[:udp if udp]
+```
 
 The ID includes the hostname to help you identify which host this service is
 running on. This is why running Registrator in host network mode or setting
@@ -187,115 +199,137 @@ Although this can be overridden on containers with `SERVICE_ID` or
 
 ##### Single service with defaults
 
-    $ docker run -d --name redis.0 -p 10000:6379 progrium/redis
+```shell
+docker run -d --name redis.0 -p 10000:6379 progrium/redis
+```
 
 Results in `Service`:
 
-    {
-      "ID": "hostname:redis.0:6379",
-      "Name": "redis",
-      "Port": 10000,
-      "IP": "192.168.1.102",
-      "Tags": [],
-      "Attrs": {}
-    }
+```json
+{
+  "ID": "hostname:redis.0:6379",
+  "Name": "redis",
+  "Port": 10000,
+  "IP": "192.168.1.102",
+  "Tags": [],
+  "Attrs": {}
+}
+```
 
 ##### Single service with metadata
 
-    $ docker run -d --name redis.0 -p 10000:6379 \
-      -e "SERVICE_NAME=db" \
-      -e "SERVICE_TAGS=master,backups" \
-      -e "SERVICE_REGION=us2" progrium/redis
+```bash
+$ docker run -d --name redis.0 -p 10000:6379 \
+  -e "SERVICE_NAME=db" \
+  -e "SERVICE_TAGS=master,backups" \
+  -e "SERVICE_REGION=us2" progrium/redis
+```
 
 Results in `Service`:
 
-    {
-      "ID": "hostname:redis.0:6379",
-      "Name": "db",
-      "Port": 10000,
-      "IP": "192.168.1.102",
-      "Tags": ["master", "backups"],
-      "Attrs": {"region": "us2"}
-    }
+```json
+{
+  "ID": "hostname:redis.0:6379",
+  "Name": "db",
+  "Port": 10000,
+  "IP": "192.168.1.102",
+  "Tags": ["master", "backups"],
+  "Attrs": {"region": "us2"}
+}
+```
 
 Keep in mind not all of the `Service` object may be used by the registry backend. For example, currently none of them support registering arbitrary attributes. This field is there for future use.
 
 The comma can be escaped by adding a backslash, such as the following example:
 
-    $ docker run -d --name redis.0 -p 10000:6379 \
-        -e "SERVICE_NAME=db" \
-        -e "SERVICE_TAGS=/(;\\,:-_)/" \
-        -e "SERVICE_REGION=us2" progrium/redis
+```bash
+$ docker run -d --name redis.0 -p 10000:6379 \
+  -e "SERVICE_NAME=db" \
+  -e "SERVICE_TAGS=/(;\\,:-_)/" \
+  -e "SERVICE_REGION=us2" progrium/redis
+```
 
 ##### Multiple services with defaults
 
-  $ docker run -d --name nginx.0 -p 4443:443 -p 8000:80 progrium/nginx
+```bash
+docker run -d --name nginx.0 -p 4443:443 -p 8000:80 progrium/nginx
+```
 
 Results in two `Service` objects:
 
-    [
-      {
-        "ID": "hostname:nginx.0:443",
-        "Name": "nginx-443",
-        "Port": 4443,
-        "IP": "192.168.1.102",
-        "Tags": [],
-        "Attrs": {},
-      },
-      {
-        "ID": "hostname:nginx.0:80",
-        "Name": "nginx-80",
-        "Port": 8000,
-        "IP": "192.168.1.102",
-        "Tags": [],
-        "Attrs": {}
-      }
-    ]
+```json
+[
+  {
+    "ID": "hostname:nginx.0:443",
+    "Name": "nginx-443",
+    "Port": 4443,
+    "IP": "192.168.1.102",
+    "Tags": [],
+    "Attrs": {},
+  },
+  {
+    "ID": "hostname:nginx.0:80",
+    "Name": "nginx-80",
+    "Port": 8000,
+    "IP": "192.168.1.102",
+    "Tags": [],
+    "Attrs": {}
+  }
+]
+```
 
 ##### Multiple services with metadata
 
-    $ docker run -d --name nginx.0 -p 4443:443 -p 8000:80 \
-      -e "SERVICE_443_NAME=https" \
-      -e "SERVICE_443_ID=https.12345" \
-      -e "SERVICE_443_SNI=enabled" \
-      -e "SERVICE_80_NAME=http" \
-      -e "SERVICE_TAGS=www" progrium/nginx
+```bash
+$ docker run -d --name nginx.0 -p 4443:443 -p 8000:80 \
+  -e "SERVICE_443_NAME=https" \
+  -e "SERVICE_443_ID=https.12345" \
+  -e "SERVICE_443_SNI=enabled" \
+  -e "SERVICE_80_NAME=http" \
+  -e "SERVICE_TAGS=www" progrium/nginx
+```
 
 Results in two `Service` objects:
 
-    [
-      {
-        "ID": "https.12345",
-        "Name": "https",
-        "Port": 4443,
-        "IP": "192.168.1.102",
-        "Tags": ["www"],
-        "Attrs": {"sni": "enabled"},
-      },
-      {
-        "ID": "hostname:nginx.0:80",
-        "Name": "http",
-        "Port": 8000,
-        "IP": "192.168.1.102",
-        "Tags": ["www"],
-        "Attrs": {}
-      }
-    ]
+```json
+[
+  {
+    "ID": "https.12345",
+    "Name": "https",
+    "Port": 4443,
+    "IP": "192.168.1.102",
+    "Tags": ["www"],
+    "Attrs": {"sni": "enabled"},
+  },
+  {
+    "ID": "hostname:nginx.0:80",
+    "Name": "http",
+    "Port": 8000,
+    "IP": "192.168.1.102",
+    "Tags": ["www"],
+    "Attrs": {}
+  }
+]
+```
 
 ##### Using labels to define metadata
 
-    $ docker run -d --name redis.0 -p 10000:6379 \
-      -l "SERVICE_NAME=db" \
-      -l "SERVICE_TAGS=master,backups" \
-      -l "SERVICE_REGION=us2" dockerfile/redis
+```bash
+$ docker run -d --name redis.0 -p 10000:6379 \
+  -l "SERVICE_NAME=db" \
+  -l "SERVICE_TAGS=master,backups" \
+  -l "SERVICE_REGION=us2" dockerfile/redis
+```
 
 Results in `Service`:
 
-    {
-      "ID": "hostname:redis.0:6379",
-      "Name": "db",
-      "Port": 10000,
-      "IP": "192.168.1.102",
-      "Tags": ["master", "backups"],
-      "Attrs": {"region": "us2"}
-    }
+```json
+{
+  "ID": "hostname:redis.0:6379",
+  "Name": "db",
+  "Port": 10000,
+  "IP": "192.168.1.102",
+  "Tags": ["master", "backups"],
+  "Attrs": {"region": "us2"}
+}
+```
