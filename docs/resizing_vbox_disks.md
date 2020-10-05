@@ -27,17 +27,19 @@ NOTE: The disk name and storagectl values may differ depending on the box in use
 
    # clone the drive to a new format:
    VBoxManage clonemedium disk \
-     ~/VirtualBox\ VMs/dev-on-ub/ubuntu-16.04-amd64-disk1.vmdk \
-     ~/VirtualBox\ VMs/dev-on-ub/ubuntu-16.04-amd64-disk1.vdi --format vdi
+     ~/VirtualBox\ VMs/dev-on-ub/generic-ubuntu1804-virtualbox-disk001.vmdk \
+     ~/VirtualBox\ VMs/dev-on-ub/generic-ubuntu1804-virtualbox-disk001.vdi --format vdi
 
-   # Resize it to desired size (e.g., 60GB here):
-   VBoxManage modifymedium ~/VirtualBox\ VMs/dev-on-ub/ubuntu-16.04-amd64-disk1.vdi \
-     --resize $(expr 60 \* 1024)
+   # Resize it to desired size (e.g., 80GB here):
+   VBoxManage modifymedium ~/VirtualBox\ VMs/dev-on-ub/generic-ubuntu1804-virtualbox-disk001.vdi \
+     --resize $(expr 80 \* 1024)
 
    # Replace the original drive:
-   VBoxManage storageattach dev-on-ub --storagectl "SATA Controller" --port 0 \
-     --device 0 --type hdd  --medium ~/VirtualBox\ VMs/dev-on-ub/ubuntu-16.04-amd64-disk1.vdi
+   VBoxManage storageattach dev-on-ub --storagectl "IDE Controller" --port 0 \
+     --device 0 --type hdd  --medium ~/VirtualBox\ VMs/dev-on-ub/generic-ubuntu1804-virtualbox-disk001.vdi
    ```
+
+   *NOTE*: The _storagectl_ value is displayed in the VirtualBox UI. It might be "SATA Controller".
 
 3. Configure the boot order (1: optical drive; 2: disk):
 
@@ -56,7 +58,7 @@ NOTE: The disk name and storagectl values may differ depending on the box in use
 5. Attach optical drive w/ cd:
 
    ```shell
-   VBoxManage storageattach dev-on-ub --storagectl "SATA Controller" --port 1 \
+   VBoxManage storageattach dev-on-ub --storagectl "IDE Controller" --port 1 \
      --device 0 --type dvddrive --medium ./gparted-live-0.28.1-1-amd64.iso
    ```
 
@@ -70,24 +72,28 @@ NOTE: The disk name and storagectl values may differ depending on the box in use
    ```
 
 7. Follow the prompts in GParted until a GUI appears.
+   
    Choose not to modify the keymap, then select a language you want, then continue
    through the remaining prompts. If GParted does not start automatically, start it.
 
    Note the partition device and mount point for the next step. In this example,
    these are /dev/sda5 and vagrant--vg-root.
 
-   You will need to "deactivate" the existing partitions (right click to open menu),
+   You may need to "deactivate" the existing partitions (right click to open menu),
    this will remove the locks, then right click the partition you want to resize
    and modify the partition size as desired. Apply the changes.
 
-   This process must be done twice. Once to resize the extended partition so
-   that it can use all the space on the physical disk, and again to resize the
-   child of the extended partition, /dev/sda5, so that it can use all the space
-   in the parent partition.
+   This process must be done twice if the disk is managed by LVM. Once to resize
+   the extended partition so that it can use all the space on the physical disk,
+   and again to resize the child of the extended partition, /dev/sda5, so that it
+   can use all the space in the parent partition.
 
-8. Close the GParted application, then open the terminal (do not reboot) and
-   run the following commands IF the disk is setup with LVM. Note the double
-   dash in 'vagrant--vg-root'.
+   If the disk is not managed by LVM, then simply resizing the partition should be
+   sufficient.
+
+8. Close the GParted application.
+9. *IF the disk is setup with LVM* then open the terminal (do not reboot) and
+   run the following commands. Note the double dash in 'vagrant--vg-root'.
 
    ```shell
    sudo pvresize /dev/sda5
@@ -96,12 +102,12 @@ NOTE: The disk name and storagectl values may differ depending on the box in use
    sudo resize2fs /dev/mapper/vagrant-–vg-root
    ```
 
-9. Shutdown the machine.
+11. Shutdown the machine.
 
-10. If the disk isn't automatically ejected, Eject the ISO in the optical drive:
+12. If the disk isn't automatically ejected, Eject the ISO in the optical drive:
 
     ```shell
-    VBoxManage storageattach dev-on-ub --storagectl "SATA Controller" --port 1 \
+    VBoxManage storageattach dev-on-ub --storagectl "IDE Controller" --port 1 \
       --device 0 --type dvddrive --forceunmount --medium emptydrive
     ```
 
