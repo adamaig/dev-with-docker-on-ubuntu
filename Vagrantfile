@@ -1,16 +1,17 @@
 # frozen_string_literal: true
+
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
-require 'yaml'
-require 'erb'
-require 'pp'
+require "yaml"
+require "erb"
+require "pp"
 
 # Default configuration options
 config_options = {
   "user" => {
-    "username" => ENV.fetch('USER'),
-    "shell" => ENV.fetch('SHELL')
+    "username" => ENV.fetch("USER"),
+    "shell" => ENV.fetch("SHELL")
   },
   "enable_gui" => false,
   "vm" => {
@@ -38,7 +39,7 @@ config_options = {
 
 class Hash
   def options_merge(other)
-    self.merge(other) do |key, self_v, other_v|
+    merge(other) do |key, self_v, other_v|
       if self_v.is_a?(Hash)
         self_v.options_merge(other_v)
       else
@@ -50,16 +51,16 @@ end
 
 # Read option file if it exists
 if File.exist?("config.yml")
-  config_yaml = YAML.load(ERB.new(File.read("config.yml")).result)
+  config_yaml = YAML.safe_load(ERB.new(File.read("config.yml")).result)
   config_options = config_options.options_merge(config_yaml)
   puts "** Running with options:"
   pp config_options
 end
 
 # Specifies the docker-engine apt package version
-DOCKER_ENGINE_VERSION="5:19.03.8~3-0~ubuntu-bionic"
+DOCKER_ENGINE_VERSION = "5:19.03.8~3-0~ubuntu-bionic"
 # Specifies the docker-compose release version
-DOCKER_COMPOSE_VERSION="1.25.5"
+DOCKER_COMPOSE_VERSION = "1.25.5"
 
 # Set this to true in order to enable the gui and install necessary packages
 ENABLE_GUI = config_options["enable_gui"]
@@ -108,75 +109,75 @@ TIMEZONE = config_options["tz"]
 
 # These HEREDOCs are additional config files used to setup the docker development
 # environment and dns lookups
-dnsmasq_base_conf = <<EOF
-# Add listener for systemd-resolved
-listen-address=127.0.0.2
-# add listener for configured ip
-listen-address=#{VM_IP}
+dnsmasq_base_conf = <<~EOF
+  # Add listener for systemd-resolved
+  listen-address=127.0.0.2
+  # add listener for configured ip
+  listen-address=#{VM_IP}
 EOF
 
-dnsmasq_docker_conf = <<EOF
-# add listener for docker daemon bridge
-listen-address=#{DOCKER_BRIDGE_IP}
-# point DNS resolution for domain to consul
-server=/.service.#{CONSUL_DOMAIN}/127.0.0.1##{CONSUL_DNS_PORT}
+dnsmasq_docker_conf = <<~EOF
+  # add listener for docker daemon bridge
+  listen-address=#{DOCKER_BRIDGE_IP}
+  # point DNS resolution for domain to consul
+  server=/.service.#{CONSUL_DOMAIN}/127.0.0.1##{CONSUL_DNS_PORT}
 EOF
 
 # The systemd dropin config for the docker service
-docker_drop_in_conf = <<EOF
-[Unit]
-# Ensure the docker bridge is up before starting dnsmasq
-Before=dnsmasq.service
-
-[Service]
-# Reset the ExecStart values due to systemd quirk
-ExecStart=
-# Manage configuration options in /etc/docker/daemon.json
-ExecStart=/usr/bin/dockerd
-# Ensure traffic to containers is not dropped
-ExecStartPost=/sbin/iptables -P FORWARD ACCEPT
+docker_drop_in_conf = <<~EOF
+  [Unit]
+  # Ensure the docker bridge is up before starting dnsmasq
+  Before=dnsmasq.service
+  
+  [Service]
+  # Reset the ExecStart values due to systemd quirk
+  ExecStart=
+  # Manage configuration options in /etc/docker/daemon.json
+  ExecStart=/usr/bin/dockerd
+  # Ensure traffic to containers is not dropped
+  ExecStartPost=/sbin/iptables -P FORWARD ACCEPT
 EOF
 
-docker_daemon_json = <<EOF
-{
-  "hosts": ["fd://", "tcp://0.0.0.0:2375"],
-  "bip": "#{DOCKER_BRIDGE_CIDR}"
-}
+docker_daemon_json = <<~EOF
+  {
+    "hosts": ["fd://", "tcp://0.0.0.0:2375"],
+    "bip": "#{DOCKER_BRIDGE_CIDR}"
+  }
 EOF
 
-systemd_resolved_dnsmasq_conf = <<EOF
-[Resolve]
-DNS=127.0.0.2
+systemd_resolved_dnsmasq_conf = <<~EOF
+  [Resolve]
+  DNS=127.0.0.2
 EOF
 
 # This script is emitted to allow easy reinstantiation of the OSX routes to the
 # consul guests
-osx_routes = <<EOF
-#!/bin/bash
-
-echo '** Adding resolver directory if it does not exist'
-[[ ! -d /etc/resolver ]] && sudo mkdir -p /etc/resolver
-
-echo '** Adding/Replacing *.docker resolver (replacing to ensure OSX sees the change)'
-[[ -f /etc/resolver/#{CONSUL_DOMAIN} ]] && sudo rm -f /etc/resolver/#{CONSUL_DOMAIN}
-sudo bash -c "printf '%s\n%s\n' 'nameserver #{VM_IP}' > /etc/resolver/#{CONSUL_DOMAIN}"
-
-echo '** Adding routes'
-sudo route -n delete #{DOCKER_SUBNET_CIDR} #{VM_IP}
-sudo route -n add #{DOCKER_SUBNET_CIDR} #{VM_IP}
+osx_routes = <<~EOF
+  #!/bin/bash
+  
+  echo '** Adding resolver directory if it does not exist'
+  [[ ! -d /etc/resolver ]] && sudo mkdir -p /etc/resolver
+  
+  echo '** Adding/Replacing *.docker resolver (replacing to ensure OSX sees the change)'
+  [[ -f /etc/resolver/#{CONSUL_DOMAIN} ]] && sudo rm -f /etc/resolver/#{CONSUL_DOMAIN}
+  sudo bash -c "printf '%s\n%s\n' 'nameserver #{VM_IP}' > /etc/resolver/#{CONSUL_DOMAIN}"
+  
+  echo '** Adding routes'
+  sudo route -n delete #{DOCKER_SUBNET_CIDR} #{VM_IP}
+  sudo route -n add #{DOCKER_SUBNET_CIDR} #{VM_IP}
 EOF
 
 # This script is emitted to allow mounting the NFS share
-mount_nfs = <<EOF
-#!/bin/bash
-
-echo '** Mounting ubuntu NFS /home/#{USERNAME}/#{NFS_MOUNT_DIRNAME} to ~/#{NFS_MOUNT_DIRNAME}'
-[[ ! -d #{ENV.fetch('HOME')}/#{NFS_MOUNT_DIRNAME} ]] && mkdir #{ENV.fetch('HOME')}/#{NFS_MOUNT_DIRNAME} && touch #{ENV.fetch('HOME')}/#{NFS_MOUNT_DIRNAME}/.metadata_never_index
-sudo mount -t nfs -o #{NFS_HOST_MOUNT_OPTS} #{VM_IP}:/home/#{USERNAME}/#{NFS_MOUNT_DIRNAME} #{ENV.fetch('HOME')}/#{NFS_MOUNT_DIRNAME}
+mount_nfs = <<~EOF
+  #!/bin/bash
+  
+  echo '** Mounting ubuntu NFS /home/#{USERNAME}/#{NFS_MOUNT_DIRNAME} to ~/#{NFS_MOUNT_DIRNAME}'
+  [[ ! -d #{ENV.fetch("HOME")}/#{NFS_MOUNT_DIRNAME} ]] && mkdir #{ENV.fetch("HOME")}/#{NFS_MOUNT_DIRNAME} && touch #{ENV.fetch("HOME")}/#{NFS_MOUNT_DIRNAME}/.metadata_never_index
+  sudo mount -t nfs -o #{NFS_HOST_MOUNT_OPTS} #{VM_IP}:/home/#{USERNAME}/#{NFS_MOUNT_DIRNAME} #{ENV.fetch("HOME")}/#{NFS_MOUNT_DIRNAME}
 EOF
 
-File.open("./setup_routes", "w", 0700) { |f| f.puts osx_routes } unless File.exist?("./setup_routes")
-File.open("./mount_nfs_share", "w", 0700) { |f| f.puts mount_nfs } unless File.exist?("./mount_nfs_share")
+File.open("./setup_routes", "w", 0o700) { |f| f.puts osx_routes } unless File.exist?("./setup_routes")
+File.open("./mount_nfs_share", "w", 0o700) { |f| f.puts mount_nfs } unless File.exist?("./mount_nfs_share")
 
 Vagrant.configure("2") do |config|
   config.vm.box = "generic/ubuntu1804"
@@ -320,15 +321,15 @@ Vagrant.configure("2") do |config|
     echo "#{USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/dev_w_docker_user
   SHELL
 
-  USER_SETUP_TMP_DIR = "/tmp/user_setup"
-  config.vm.provision "copy_user_ssh_files", type: "file", source: "~#{USERNAME}/.ssh", destination: "#{USER_SETUP_TMP_DIR}/.ssh"
-  config.vm.provision "copy_consul_example", type: "file", source: "./consul-registrator-setup", destination: "#{USER_SETUP_TMP_DIR}/consul-registrator-setup"
-  config.vm.provision "cp_dev_tool_script", type: "file", source: "./devtools.sh", destination: "#{USER_SETUP_TMP_DIR}/"
+  user_setup_tmp_dir = "/tmp/user_setup"
+  config.vm.provision "copy_user_ssh_files", type: "file", source: "~#{USERNAME}/.ssh", destination: "#{user_setup_tmp_dir}/.ssh"
+  config.vm.provision "copy_consul_example", type: "file", source: "./consul-registrator-setup", destination: "#{user_setup_tmp_dir}/consul-registrator-setup"
+  config.vm.provision "cp_dev_tool_script", type: "file", source: "./devtools.sh", destination: "#{user_setup_tmp_dir}/"
   if File.exist?("./devtools-personal.sh")
-    config.vm.provision "cp_personal_dev_tool_script", type: "file", source: "./devtools-personal.sh", destination: "#{USER_SETUP_TMP_DIR}/"
+    config.vm.provision "cp_personal_dev_tool_script", type: "file", source: "./devtools-personal.sh", destination: "#{user_setup_tmp_dir}/"
   end
   config.vm.provision "mv_setup_files_to_user_dir", type: "shell", inline: <<-SHELL
-    sudo cp -r #{USER_SETUP_TMP_DIR}/.ssh #{USER_SETUP_TMP_DIR}/* ~#{USERNAME}/
+    sudo cp -r #{user_setup_tmp_dir}/.ssh #{user_setup_tmp_dir}/* ~#{USERNAME}/
     sudo chown -R #{USERNAME}: ~#{USERNAME}
   SHELL
 
@@ -347,7 +348,7 @@ Vagrant.configure("2") do |config|
   SHELL
 
   config.vm.provision "exec_devtools_script", type: "shell",
-    inline: "sudo -u #{USERNAME} -i bash ~#{USERNAME}/devtools.sh"
+                                              inline: "sudo -u #{USERNAME} -i bash ~#{USERNAME}/devtools.sh"
 
   config.vm.provision "setup_consul_example", type: "shell", inline: <<-SHELL
     sed -i -e 's/docker\./#{CONSUL_DOMAIN}./' ~#{USERNAME}/consul-registrator-setup/consul.json
@@ -383,20 +384,21 @@ Vagrant.configure("2") do |config|
 
   config.trigger.after [:up] do |t|
     t.name = "Docker Usage"
-    t.info = "** Run 'export DOCKER_HOST=\"tcp://#{VM_IP}:2375\"' on host to interact with docker in the vagrant guest.\n" +
-             "** See https://docs.docker.com/engine/reference/commandline/cli/#environment-variables"
+    t.info =
+      "** Run 'export DOCKER_HOST=\"tcp://#{VM_IP}:2375\"' on host to interact with docker in the vagrant guest.\n \
+       ** See https://docs.docker.com/engine/reference/commandline/cli/#environment-variables"
   end
 
   config.trigger.after [:up] do |t|
     t.name = "Host2Guest Routing"
     t.info = "** Setting up routing to .#{CONSUL_DOMAIN} domain"
-    t.run = { path: "./setup_routes" }
+    t.run = {path: "./setup_routes"}
   end
 
   config.trigger.after [:up] do |t|
     t.name = "Guest2Host NFS Export & mount"
     t.info = "** Mouting NFS share"
-    t.run = { path: "./mount_nfs_share" }
+    t.run = {path: "./mount_nfs_share"}
   end
 
   config.trigger.after [:up] do |t|
