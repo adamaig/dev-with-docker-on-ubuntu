@@ -12,3 +12,5 @@ sudo apt-get install -y \
 
 echo "Add customizations to devtools-personal.sh"
 [[ -f ~/devtools-personal.sh ]] && chmod +x ~/devtools-personal.sh && bash ~/devtools-personal.sh
+
+exit 0
