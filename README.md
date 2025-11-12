@@ -1,5 +1,7 @@
 # dev-with-docker-on-ubuntu
 
+*Update*: As docker-desktop and other innovations have largely solved the problems this tooling addressed, this is being archived.
+
 After fighting with Docker on OSX and the need for 2-way syncs, fsevents, etc.
 I developed a desire to get back to a simple(r) development on a linux based
 VM. This project is a jumping off point.
